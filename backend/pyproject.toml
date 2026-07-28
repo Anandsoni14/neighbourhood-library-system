@@ -1,0 +1,50 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "alembic>=1.18.5",
+    "fastapi[standard]>=0.139.2",
+    "psycopg[binary]>=3.3.4",
+    "pydantic-settings>=2.14.2",
+    "sqlalchemy[asyncio]>=2.0.51",
+]
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "mypy>=2.3.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+ignore = [
+    "B008",  # FastAPI's `Depends(...)` as a default argument is the idiomatic DI pattern.
+    "N818",  # Domain exceptions are named with an `Exception` suffix per project convention.
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py313"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "alembic.*"
+disallow_untyped_defs = false
+disallow_untyped_calls = false
