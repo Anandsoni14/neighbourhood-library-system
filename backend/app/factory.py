@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from api.books import router as books_router
 from api.health import router as health_router
 from app.exception_handlers import register_exception_handlers
 from core.config import get_settings
@@ -23,5 +24,6 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(books_router)
 
     return app
