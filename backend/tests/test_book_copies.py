@@ -1,0 +1,161 @@
+from uuid import uuid4
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.exceptions import ConflictError, NotFoundError
+from models.enums import CopyStatus
+from services.book import BookService
+from services.book_copy import BookCopyService
+
+
+@pytest.fixture
+async def book_service(db: AsyncSession) -> BookService:
+    return BookService(db)
+
+
+@pytest.fixture
+async def copy_service(db: AsyncSession) -> BookCopyService:
+    return BookCopyService(db)
+
+
+class TestBookCopyService:
+    """Test BookCopyService business logic."""
+
+    async def test_create_copy(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        book = await book_service.create_book(title="Dune", author="Frank Herbert")
+        copy = await copy_service.create_copy(book_id=book.book_id, barcode="BC-001")
+        assert copy.barcode == "BC-001"
+        assert copy.book_id == book.book_id
+        assert copy.status == CopyStatus.AVAILABLE
+
+    async def test_create_copy_book_not_found_raises(self, copy_service: BookCopyService) -> None:
+        with pytest.raises(NotFoundError):
+            await copy_service.create_copy(book_id=uuid4(), barcode="BC-002")
+
+    async def test_create_copy_duplicate_barcode_raises_conflict(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        book = await book_service.create_book(title="Dune", author="Frank Herbert")
+        await copy_service.create_copy(book_id=book.book_id, barcode="BC-DUP")
+        with pytest.raises(ConflictError):
+            await copy_service.create_copy(book_id=book.book_id, barcode="BC-DUP")
+
+    async def test_get_copy_not_found_raises(self, copy_service: BookCopyService) -> None:
+        with pytest.raises(NotFoundError):
+            await copy_service.get_copy(uuid4())
+
+    async def test_list_copies_by_book(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        book_a = await book_service.create_book(title="Book A", author="Author A")
+        book_b = await book_service.create_book(title="Book B", author="Author B")
+        await copy_service.create_copy(book_id=book_a.book_id, barcode="A-1")
+        await copy_service.create_copy(book_id=book_a.book_id, barcode="A-2")
+        await copy_service.create_copy(book_id=book_b.book_id, barcode="B-1")
+
+        results = await copy_service.list_copies_by_book(book_a.book_id)
+        assert len(results) == 2
+
+    async def test_list_copies_by_status(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        book = await book_service.create_book(title="Book", author="Author")
+        await copy_service.create_copy(book_id=book.book_id, barcode="S-1")
+        results = await copy_service.list_copies_by_status(CopyStatus.AVAILABLE)
+        assert len(results) == 1
+
+    async def test_update_copy(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        book = await book_service.create_book(title="Book", author="Author")
+        copy = await copy_service.create_copy(book_id=book.book_id, barcode="U-1")
+        updated = await copy_service.update_copy(copy.copy_id, shelf_code="A-12")
+        assert updated.shelf_code == "A-12"
+
+    async def test_delete_copy(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        book = await book_service.create_book(title="Book", author="Author")
+        copy = await copy_service.create_copy(book_id=book.book_id, barcode="D-1")
+        await copy_service.delete_copy(copy.copy_id)
+        with pytest.raises(NotFoundError):
+            await copy_service.get_copy(copy.copy_id)
+
+
+class TestBookCopiesAPI:
+    """Test Book Copies API endpoints."""
+
+    async def test_create_book_copy_endpoint(self, client: AsyncClient) -> None:
+        book_resp = await client.post(
+            "/api/v1/books", json={"title": "1984", "author": "George Orwell"}
+        )
+        book_id = book_resp.json()["book_id"]
+
+        response = await client.post(
+            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-100"}
+        )
+        assert response.status_code == 201
+        data = response.json()
+        assert data["barcode"] == "COPY-100"
+        assert data["status"] == "AVAILABLE"
+
+    async def test_create_book_copy_book_not_found(self, client: AsyncClient) -> None:
+        response = await client.post(
+            "/api/v1/book-copies", json={"book_id": str(uuid4()), "barcode": "COPY-404"}
+        )
+        assert response.status_code == 404
+
+    async def test_list_book_copies_by_book(self, client: AsyncClient) -> None:
+        book_resp = await client.post(
+            "/api/v1/books", json={"title": "Brave New World", "author": "Huxley"}
+        )
+        book_id = book_resp.json()["book_id"]
+        await client.post("/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-A"})
+
+        response = await client.get(f"/api/v1/book-copies?book_id={book_id}")
+        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+    async def test_get_book_copy_endpoint(self, client: AsyncClient) -> None:
+        book_resp = await client.post("/api/v1/books", json={"title": "Book", "author": "Author"})
+        book_id = book_resp.json()["book_id"]
+        copy_resp = await client.post(
+            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-B"}
+        )
+        copy_id = copy_resp.json()["copy_id"]
+
+        response = await client.get(f"/api/v1/book-copies/{copy_id}")
+        assert response.status_code == 200
+        assert response.json()["barcode"] == "COPY-B"
+
+    async def test_update_book_copy_endpoint(self, client: AsyncClient) -> None:
+        book_resp = await client.post("/api/v1/books", json={"title": "Book", "author": "Author"})
+        book_id = book_resp.json()["book_id"]
+        copy_resp = await client.post(
+            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-C"}
+        )
+        copy_id = copy_resp.json()["copy_id"]
+
+        response = await client.put(
+            f"/api/v1/book-copies/{copy_id}", json={"status": "MAINTENANCE"}
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "MAINTENANCE"
+
+    async def test_delete_book_copy_endpoint(self, client: AsyncClient) -> None:
+        book_resp = await client.post("/api/v1/books", json={"title": "Book", "author": "Author"})
+        book_id = book_resp.json()["book_id"]
+        copy_resp = await client.post(
+            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-D"}
+        )
+        copy_id = copy_resp.json()["copy_id"]
+
+        response = await client.delete(f"/api/v1/book-copies/{copy_id}")
+        assert response.status_code == 204
+
+        response = await client.get(f"/api/v1/book-copies/{copy_id}")
+        assert response.status_code == 404

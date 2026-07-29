@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from api.book_copies import router as book_copies_router
 from api.books import router as books_router
 from api.health import router as health_router
 from app.exception_handlers import register_exception_handlers
@@ -25,5 +26,6 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(books_router)
+    app.include_router(book_copies_router)
 
     return app

@@ -2,6 +2,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ConflictError, NotFoundError
@@ -81,12 +82,13 @@ class BookService:
         return book
 
     async def delete_book(self, book_id: UUID) -> None:
-        """Delete a book (only if it has no copies).
-
-        FK constraint on book_copy.book_id ensures no orphaned copies remain.
-        """
+        """Delete a book. Fails if it still has copies (FK RESTRICT on book_copy.book_id)."""
         book = await self.get_book(book_id)
         await self.repository.delete(book)
+        try:
+            await self._session.flush()
+        except IntegrityError as e:
+            raise ConflictError(f"Cannot delete book {book_id}: it still has copies") from e
         logger.info("book_deleted", extra={"book_id": str(book_id)})
 
     async def search_books(self, title: str | None = None, isbn: str | None = None) -> list[Book]:
