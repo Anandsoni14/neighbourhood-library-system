@@ -18,3 +18,27 @@ class ConflictError(DomainException):
     """The requested operation conflicts with the current state of the resource."""
 
     message: str = "The request conflicts with the current state of the resource."
+
+
+class MemberNotEligibleException(ConflictError):
+    """A member's status prevents them from borrowing (not ACTIVE)."""
+
+    message: str = "Member is not eligible to borrow at this time."
+
+
+class BookUnavailableException(ConflictError):
+    """The requested copy is not available to be borrowed."""
+
+    message: str = "This book copy is not available for borrowing."
+
+
+class LoanNotFoundException(NotFoundError):
+    """A requested loan does not exist."""
+
+    message: str = "The requested loan was not found."
+
+
+class LoanAlreadyReturnedException(ConflictError):
+    """An attempt was made to return a loan that isn't currently active."""
+
+    message: str = "This loan has already been returned."
