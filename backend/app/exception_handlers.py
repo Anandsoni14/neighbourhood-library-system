@@ -3,11 +3,19 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from core.exceptions import ConflictError, DomainException, NotFoundError
+from core.exceptions import (
+    AuthenticationException,
+    AuthorizationException,
+    ConflictError,
+    DomainException,
+    NotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
 _STATUS_BY_EXCEPTION: tuple[tuple[type[DomainException], int], ...] = (
+    (AuthenticationException, 401),
+    (AuthorizationException, 403),
     (NotFoundError, 404),
     (ConflictError, 409),
 )

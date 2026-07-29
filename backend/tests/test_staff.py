@@ -5,7 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ConflictError, NotFoundError
-from core.security import verify_password
+from core.security import create_access_token, verify_password
 from models.enums import StaffRole, StaffStatus
 from services.staff import StaffService
 
@@ -13,6 +13,34 @@ from services.staff import StaffService
 @pytest.fixture
 async def staff_service(db: AsyncSession) -> StaffService:
     return StaffService(db)
+
+
+@pytest.fixture
+async def admin_headers(staff_service: StaffService) -> dict[str, str]:
+    admin = await staff_service.create_staff(
+        employee_code=f"ADMIN-{uuid4().hex[:8]}",
+        first_name="Admin",
+        last_name="User",
+        email=f"{uuid4()}@library.com",
+        password="adminpass123",
+        role=StaffRole.ADMIN,
+    )
+    token = create_access_token(admin.staff_id, admin.role)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+async def librarian_headers(staff_service: StaffService) -> dict[str, str]:
+    librarian = await staff_service.create_staff(
+        employee_code=f"LIB-{uuid4().hex[:8]}",
+        first_name="Lib",
+        last_name="User",
+        email=f"{uuid4()}@library.com",
+        password="libpassword123",
+        role=StaffRole.LIBRARIAN,
+    )
+    token = create_access_token(librarian.staff_id, librarian.role)
+    return {"Authorization": f"Bearer {token}"}
 
 
 class TestStaffService:
@@ -136,7 +164,9 @@ class TestStaffService:
 class TestStaffAPI:
     """Test Staff API endpoints."""
 
-    async def test_create_staff_endpoint(self, client: AsyncClient) -> None:
+    async def test_create_staff_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
         response = await client.post(
             "/api/v1/staff",
             json={
@@ -146,6 +176,7 @@ class TestStaffAPI:
                 "email": "alice.api@library.com",
                 "password": "supersecret123",
             },
+            headers=admin_headers,
         )
         assert response.status_code == 201
         data = response.json()
@@ -153,7 +184,38 @@ class TestStaffAPI:
         assert "password" not in data
         assert "password_hash" not in data
 
-    async def test_create_staff_short_password_rejected(self, client: AsyncClient) -> None:
+    async def test_create_staff_endpoint_no_token_401(self, client: AsyncClient) -> None:
+        response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-001B",
+                "first_name": "Alice",
+                "last_name": "Librarian",
+                "email": "alice.b@library.com",
+                "password": "supersecret123",
+            },
+        )
+        assert response.status_code == 401
+
+    async def test_create_staff_endpoint_librarian_forbidden_403(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-001C",
+                "first_name": "Alice",
+                "last_name": "Librarian",
+                "email": "alice.c@library.com",
+                "password": "supersecret123",
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 403
+
+    async def test_create_staff_short_password_rejected(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
         response = await client.post(
             "/api/v1/staff",
             json={
@@ -163,15 +225,20 @@ class TestStaffAPI:
                 "email": "bob.api@library.com",
                 "password": "short",
             },
+            headers=admin_headers,
         )
         assert response.status_code == 422
 
-    async def test_list_staff_endpoint(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/staff")
+    async def test_list_staff_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        response = await client.get("/api/v1/staff", headers=admin_headers)
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    async def test_get_staff_endpoint(self, client: AsyncClient) -> None:
+    async def test_get_staff_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
         create_response = await client.post(
             "/api/v1/staff",
             json={
@@ -181,18 +248,23 @@ class TestStaffAPI:
                 "email": "carol.api@library.com",
                 "password": "supersecret123",
             },
+            headers=admin_headers,
         )
         staff_id = create_response.json()["staff_id"]
 
-        response = await client.get(f"/api/v1/staff/{staff_id}")
+        response = await client.get(f"/api/v1/staff/{staff_id}", headers=admin_headers)
         assert response.status_code == 200
         assert response.json()["email"] == "carol.api@library.com"
 
-    async def test_get_staff_not_found(self, client: AsyncClient) -> None:
-        response = await client.get(f"/api/v1/staff/{uuid4()}")
+    async def test_get_staff_not_found(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        response = await client.get(f"/api/v1/staff/{uuid4()}", headers=admin_headers)
         assert response.status_code == 404
 
-    async def test_update_staff_endpoint(self, client: AsyncClient) -> None:
+    async def test_update_staff_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
         create_response = await client.post(
             "/api/v1/staff",
             json={
@@ -202,14 +274,19 @@ class TestStaffAPI:
                 "email": "dan.api@library.com",
                 "password": "supersecret123",
             },
+            headers=admin_headers,
         )
         staff_id = create_response.json()["staff_id"]
 
-        response = await client.put(f"/api/v1/staff/{staff_id}", json={"role": "ADMIN"})
+        response = await client.put(
+            f"/api/v1/staff/{staff_id}", json={"role": "ADMIN"}, headers=admin_headers
+        )
         assert response.status_code == 200
         assert response.json()["role"] == "ADMIN"
 
-    async def test_change_password_endpoint(self, client: AsyncClient) -> None:
+    async def test_change_password_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
         create_response = await client.post(
             "/api/v1/staff",
             json={
@@ -219,16 +296,46 @@ class TestStaffAPI:
                 "email": "eve.api@library.com",
                 "password": "supersecret123",
             },
+            headers=admin_headers,
         )
         staff_id = create_response.json()["staff_id"]
 
         response = await client.post(
             f"/api/v1/staff/{staff_id}/change-password",
             json={"new_password": "newpassword456"},
+            headers=admin_headers,
         )
         assert response.status_code == 200
 
-    async def test_delete_staff_endpoint(self, client: AsyncClient) -> None:
+    async def test_change_password_endpoint_other_staff_forbidden_403(
+        self,
+        client: AsyncClient,
+        admin_headers: dict[str, str],
+        librarian_headers: dict[str, str],
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-005B",
+                "first_name": "Eve",
+                "last_name": "Staff",
+                "email": "eve.b@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+
+        response = await client.post(
+            f"/api/v1/staff/{staff_id}/change-password",
+            json={"new_password": "newpassword456"},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 403
+
+    async def test_delete_staff_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
         create_response = await client.post(
             "/api/v1/staff",
             json={
@@ -238,11 +345,12 @@ class TestStaffAPI:
                 "email": "frank.api@library.com",
                 "password": "supersecret123",
             },
+            headers=admin_headers,
         )
         staff_id = create_response.json()["staff_id"]
 
-        response = await client.delete(f"/api/v1/staff/{staff_id}")
+        response = await client.delete(f"/api/v1/staff/{staff_id}", headers=admin_headers)
         assert response.status_code == 204
 
-        response = await client.get(f"/api/v1/staff/{staff_id}")
+        response = await client.get(f"/api/v1/staff/{staff_id}", headers=admin_headers)
         assert response.status_code == 404

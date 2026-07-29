@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.exceptions import ConflictError, NotFoundError
+from api.deps import get_current_staff, require_role
+from core.exceptions import AuthorizationException, ConflictError, NotFoundError
 from db.session import get_db
+from models import Staff
 from models.enums import StaffRole, StaffStatus
 from services.staff import StaffService
 
@@ -58,9 +60,11 @@ class StaffResponse(BaseModel):
 
 @router.post("", response_model=StaffResponse, status_code=201)
 async def create_staff(
-    req: StaffCreateRequest, db: AsyncSession = Depends(get_db)
+    req: StaffCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
-    """Create a new staff member."""
+    """Create a new staff member. ADMIN only."""
     service = StaffService(db)
     try:
         staff = await service.create_staff(
@@ -82,6 +86,7 @@ async def list_staff(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
+    _current_staff: Staff = Depends(get_current_staff),
 ) -> list[StaffResponse]:
     """List all staff with pagination."""
     service = StaffService(db)
@@ -90,7 +95,11 @@ async def list_staff(
 
 
 @router.get("/{staff_id}", response_model=StaffResponse)
-async def get_staff(staff_id: UUID, db: AsyncSession = Depends(get_db)) -> StaffResponse:
+async def get_staff(
+    staff_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_staff: Staff = Depends(get_current_staff),
+) -> StaffResponse:
     """Fetch a staff member by ID."""
     service = StaffService(db)
     try:
@@ -102,9 +111,12 @@ async def get_staff(staff_id: UUID, db: AsyncSession = Depends(get_db)) -> Staff
 
 @router.put("/{staff_id}", response_model=StaffResponse)
 async def update_staff(
-    staff_id: UUID, req: StaffUpdateRequest, db: AsyncSession = Depends(get_db)
+    staff_id: UUID,
+    req: StaffUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
-    """Update a staff member (password changes use the dedicated endpoint)."""
+    """Update a staff member (password changes use the dedicated endpoint). ADMIN only."""
     service = StaffService(db)
     try:
         staff = await service.update_staff(staff_id, **req.model_dump(exclude_unset=True))
@@ -117,9 +129,14 @@ async def update_staff(
 
 @router.post("/{staff_id}/change-password", response_model=StaffResponse)
 async def change_password(
-    staff_id: UUID, req: ChangePasswordRequest, db: AsyncSession = Depends(get_db)
+    staff_id: UUID,
+    req: ChangePasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_staff: Staff = Depends(get_current_staff),
 ) -> StaffResponse:
-    """Change a staff member's password."""
+    """Change a staff member's password. Staff may change their own; ADMIN may change anyone's."""
+    if current_staff.staff_id != staff_id and current_staff.role != StaffRole.ADMIN:
+        raise AuthorizationException("You may only change your own password")
     service = StaffService(db)
     try:
         staff = await service.change_password(staff_id, req.new_password)
@@ -129,8 +146,12 @@ async def change_password(
 
 
 @router.delete("/{staff_id}", status_code=204)
-async def delete_staff(staff_id: UUID, db: AsyncSession = Depends(get_db)) -> None:
-    """Delete a staff member."""
+async def delete_staff(
+    staff_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
+) -> None:
+    """Delete a staff member. ADMIN only."""
     service = StaffService(db)
     try:
         await service.delete_staff(staff_id)

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from api.auth import router as auth_router
 from api.book_copies import router as book_copies_router
 from api.books import router as books_router
 from api.health import router as health_router
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
     register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(auth_router)
     app.include_router(books_router)
     app.include_router(book_copies_router)
     app.include_router(members_router)

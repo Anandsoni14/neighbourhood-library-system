@@ -14,6 +14,7 @@ from core.exceptions import (
     MemberNotEligibleException,
     NotFoundError,
 )
+from core.security import create_access_token
 from models import Loan
 from models.book import BookCopy
 from models.enums import CopyCondition, CopyStatus, LoanStatus
@@ -432,7 +433,9 @@ class TestLoanService:
 class TestLoansAPI:
     """Test Loans API endpoints."""
 
-    async def _setup_loan_prerequisites(self, client: AsyncClient) -> dict[str, str]:
+    async def _setup_loan_prerequisites(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> dict[str, Any]:
         book_resp = await client.post(
             "/api/v1/books", json={"title": "API Test Book", "author": "Author"}
         )
@@ -451,58 +454,64 @@ class TestLoansAPI:
             },
         )
         member_id = member_resp.json()["member_id"]
-        staff_resp = await client.post(
-            "/api/v1/staff",
-            json={
-                "employee_code": f"EMP-{uuid4().hex[:8]}",
-                "first_name": "API",
-                "last_name": "Staff",
-                "email": f"{uuid4()}@library.com",
-                "password": "password123",
-            },
-        )
-        staff_id = staff_resp.json()["staff_id"]
-        return {"copy_id": copy_id, "member_id": member_id, "staff_id": staff_id}
 
-    async def test_issue_loan_endpoint(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+        # Staff creation is ADMIN-gated; bootstrap directly via the service
+        # (bypassing HTTP/auth) rather than chicken-and-egging a token first.
+        staff = await StaffService(db).create_staff(
+            employee_code=f"EMP-{uuid4().hex[:8]}",
+            first_name="API",
+            last_name="Staff",
+            email=f"{uuid4()}@library.com",
+            password="password123",
+        )
+        token = create_access_token(staff.staff_id, staff.role)
+        headers = {"Authorization": f"Bearer {token}"}
+        return {"copy_id": copy_id, "member_id": member_id, "headers": headers}
+
+    async def test_issue_loan_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         response = await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
         assert response.status_code == 201
         data = response.json()
         assert data["status"] == "ACTIVE"
         assert data["calculated_fine"] == "0.00"
 
-    async def test_issue_loan_endpoint_blocked_member_409(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_issue_loan_endpoint_no_token_401(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        response = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+        )
+        assert response.status_code == 401
+
+    async def test_issue_loan_endpoint_blocked_member_409(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         await client.put(
             f"/api/v1/members/{ids['member_id']}", json={"membership_status": "BLOCKED"}
         )
         response = await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
         assert response.status_code == 409
 
-    async def test_issue_loan_endpoint_unavailable_copy_409(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_issue_loan_endpoint_unavailable_copy_409(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
         other_member_resp = await client.post(
             "/api/v1/members",
@@ -517,113 +526,151 @@ class TestLoansAPI:
             json={
                 "copy_id": ids["copy_id"],
                 "member_id": other_member_resp.json()["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
             },
+            headers=ids["headers"],
         )
         assert response.status_code == 409
 
-    async def test_issue_loan_endpoint_not_found_404(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_issue_loan_endpoint_not_found_404(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         response = await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": str(uuid4()),
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": str(uuid4()), "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
         assert response.status_code == 404
 
-    async def test_return_loan_endpoint(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_return_loan_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         issue_resp = await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
         loan_id = issue_resp.json()["loan_id"]
 
         response = await client.post(
             f"/api/v1/loans/{loan_id}/return",
-            json={"return_condition": "GOOD", "received_by_staff_id": ids["staff_id"]},
+            json={"return_condition": "GOOD"},
+            headers=ids["headers"],
         )
         assert response.status_code == 200
         assert response.json()["status"] == "RETURNED"
 
-    async def test_return_loan_endpoint_already_returned_409(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_return_loan_endpoint_already_returned_409(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         issue_resp = await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
         loan_id = issue_resp.json()["loan_id"]
         await client.post(
             f"/api/v1/loans/{loan_id}/return",
-            json={"return_condition": "GOOD", "received_by_staff_id": ids["staff_id"]},
+            json={"return_condition": "GOOD"},
+            headers=ids["headers"],
         )
 
         response = await client.post(
             f"/api/v1/loans/{loan_id}/return",
-            json={"return_condition": "GOOD", "received_by_staff_id": ids["staff_id"]},
+            json={"return_condition": "GOOD"},
+            headers=ids["headers"],
         )
         assert response.status_code == 409
 
-    async def test_return_loan_endpoint_not_found_404(self, client: AsyncClient) -> None:
+    async def test_return_loan_endpoint_not_found_404(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         response = await client.post(
             f"/api/v1/loans/{uuid4()}/return",
-            json={"return_condition": "GOOD", "received_by_staff_id": str(uuid4())},
+            json={"return_condition": "GOOD"},
+            headers=ids["headers"],
         )
         assert response.status_code == 404
 
-    async def test_list_loans_endpoint_by_member_filter(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_list_loans_endpoint_by_member_filter(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
 
         response = await client.get(f"/api/v1/loans?member_id={ids['member_id']}")
         assert response.status_code == 200
         assert len(response.json()) == 1
 
-    async def test_list_loans_endpoint_by_status_filter(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_list_loans_endpoint_by_status_filter(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
 
         response = await client.get("/api/v1/loans?status=ACTIVE")
         assert response.status_code == 200
         assert len(response.json()) >= 1
 
-    async def test_get_loan_endpoint(self, client: AsyncClient) -> None:
-        ids = await self._setup_loan_prerequisites(client)
+    async def test_get_loan_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
         issue_resp = await client.post(
             "/api/v1/loans",
-            json={
-                "copy_id": ids["copy_id"],
-                "member_id": ids["member_id"],
-                "issued_by_staff_id": ids["staff_id"],
-            },
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
         )
         loan_id = issue_resp.json()["loan_id"]
 
         response = await client.get(f"/api/v1/loans/{loan_id}")
         assert response.status_code == 200
         assert response.json()["loan_id"] == loan_id
+
+    async def test_overdue_loans_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        issue_resp = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+        loan_id = issue_resp.json()["loan_id"]
+
+        # Backdate to comfortably inside the (2, 3] day window (see the fee-calc
+        # test above) so ceil() deterministically yields 3 overdue days.
+        loan = await db.get(Loan, loan_id)
+        assert loan is not None
+        loan.borrowed_at = datetime.now(UTC) - timedelta(days=20)
+        loan.due_at = datetime.now(UTC) - timedelta(days=2, hours=12)
+        db.add(loan)
+        await db.flush()
+
+        response = await client.get("/api/v1/loans/overdue")
+        assert response.status_code == 200
+        data = response.json()
+        matching = [entry for entry in data if entry["loan_id"] == loan_id]
+        assert len(matching) == 1
+        assert matching[0]["days_overdue"] == 3
+        assert Decimal(matching[0]["estimated_fine"]) == Decimal("15.00")
+
+    async def test_overdue_loans_endpoint_excludes_not_yet_due(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        issue_resp = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+        loan_id = issue_resp.json()["loan_id"]
+
+        response = await client.get("/api/v1/loans/overdue")
+        assert response.status_code == 200
+        assert loan_id not in [entry["loan_id"] for entry in response.json()]

@@ -1,7 +1,9 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from db.repository import BaseRepository
 from models import Loan
@@ -34,4 +36,17 @@ class LoanRepository(BaseRepository[Loan]):
     async def list_by_status(self, status: LoanStatus) -> list[Loan]:
         """List all loans with a given status."""
         result = await self._session.execute(select(Loan).where(Loan.status == status))
+        return list(result.scalars().all())
+
+    async def list_overdue(self, as_of: datetime) -> list[Loan]:
+        """List all ACTIVE loans past due as of the given time.
+
+        Eager-loads the copy (needed for late_fee_per_day) in one query —
+        lazy="raise" forbids implicit loads, and this report can return many rows.
+        """
+        result = await self._session.execute(
+            select(Loan)
+            .options(selectinload(Loan.copy))
+            .where(Loan.status == LoanStatus.ACTIVE, Loan.due_at < as_of)
+        )
         return list(result.scalars().all())

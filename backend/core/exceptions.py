@@ -60,3 +60,15 @@ class LoanMemberMismatchException(ConflictError):
     """The given loan does not belong to the given member."""
 
     message: str = "This loan does not belong to the specified member."
+
+
+class AuthenticationException(DomainException):
+    """Credentials or bearer token are missing, invalid, or expired."""
+
+    message: str = "Authentication failed."
+
+
+class AuthorizationException(DomainException):
+    """The authenticated staff member's role does not permit this action."""
+
+    message: str = "You do not have permission to perform this action."
