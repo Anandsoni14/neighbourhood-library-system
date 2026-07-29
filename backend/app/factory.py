@@ -7,6 +7,7 @@ from api.book_copies import router as book_copies_router
 from api.books import router as books_router
 from api.health import router as health_router
 from api.members import router as members_router
+from api.staff import router as staff_router
 from app.exception_handlers import register_exception_handlers
 from core.config import get_settings
 from core.logging import configure_logging
@@ -29,5 +30,6 @@ def create_app() -> FastAPI:
     app.include_router(books_router)
     app.include_router(book_copies_router)
     app.include_router(members_router)
+    app.include_router(staff_router)
 
     return app
