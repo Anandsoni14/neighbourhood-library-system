@@ -42,3 +42,21 @@ class LoanAlreadyReturnedException(ConflictError):
     """An attempt was made to return a loan that isn't currently active."""
 
     message: str = "This loan has already been returned."
+
+
+class TransactionNotFoundException(NotFoundError):
+    """A requested transaction does not exist."""
+
+    message: str = "The requested transaction was not found."
+
+
+class TransactionNotPendingException(ConflictError):
+    """An attempt was made to settle (pay/fail/waive) a non-PENDING transaction."""
+
+    message: str = "This transaction has already been settled."
+
+
+class LoanMemberMismatchException(ConflictError):
+    """The given loan does not belong to the given member."""
+
+    message: str = "This loan does not belong to the specified member."
