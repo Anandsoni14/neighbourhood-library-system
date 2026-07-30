@@ -38,6 +38,13 @@ describe('AppRoutes', () => {
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeVisible();
   });
 
+  it('renders the Books page inside the app shell for an authenticated visitor', () => {
+    render(<AppRoutes />, { initialEntries: ['/books'], preloadedState: authenticatedState });
+
+    expect(screen.getByRole('heading', { name: 'Books' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
+  });
+
   it('renders the 404 page for an unknown path', () => {
     render(<AppRoutes />, {
       initialEntries: ['/this-page-does-not-exist'],

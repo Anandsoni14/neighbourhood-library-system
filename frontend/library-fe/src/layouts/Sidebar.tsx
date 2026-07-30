@@ -1,4 +1,6 @@
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -21,6 +23,8 @@ interface NavItem {
 // as each one lands, rather than linking to pages that don't exist yet.
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: <DashboardOutlinedIcon fontSize="small" /> },
+  { label: 'Books', path: '/books', icon: <MenuBookOutlinedIcon fontSize="small" /> },
+  { label: 'Members', path: '/members', icon: <PeopleOutlinedIcon fontSize="small" /> },
 ];
 
 export function Sidebar() {

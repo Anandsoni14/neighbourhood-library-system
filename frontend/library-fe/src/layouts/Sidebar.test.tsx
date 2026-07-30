@@ -24,4 +24,20 @@ describe('Sidebar', () => {
 
     expect(screen.getByRole('link', { name: /dashboard/i })).not.toHaveClass('Mui-selected');
   });
+
+  it('renders a Books navigation link', () => {
+    render(<Sidebar />);
+
+    const link = screen.getByRole('link', { name: /books/i });
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute('href', '/books');
+  });
+
+  it('renders a Members navigation link', () => {
+    render(<Sidebar />);
+
+    const link = screen.getByRole('link', { name: /members/i });
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute('href', '/members');
+  });
 });
