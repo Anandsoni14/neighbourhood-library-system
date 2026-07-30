@@ -67,9 +67,7 @@ export function ReturnLoanDialog({
       <Box component="form" onSubmit={handleSubmit} noValidate>
         <DialogContent>
           <Stack spacing={2}>
-            <DialogContentText>
-              Returning copy for loan {loan?.loan_id ?? ''}.
-            </DialogContentText>
+            <DialogContentText>Returning copy for loan {loan?.loan_id ?? ''}.</DialogContentText>
             {displayedError && <Alert severity="error">{displayedError}</Alert>}
             <FormControl fullWidth required>
               <InputLabel id="return-condition-label">Return condition</InputLabel>

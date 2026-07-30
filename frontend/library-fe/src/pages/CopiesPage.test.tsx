@@ -72,9 +72,7 @@ describe('CopiesPage', () => {
       throw new Error('Expected a table row');
     }
 
-    await user.click(
-      within(row).getByRole('button', { name: `Delete ${firstCopy.barcode}` }),
-    );
+    await user.click(within(row).getByRole('button', { name: `Delete ${firstCopy.barcode}` }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {

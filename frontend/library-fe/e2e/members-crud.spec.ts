@@ -46,11 +46,14 @@ test.beforeEach(async ({ page }) => {
   // The dashboard every visitor lands on after login fetches these — not
   // exercised by this spec, so a minimal empty response is enough.
   await page.route('**/api/v1/books**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/loans**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/loans/overdue**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }),
+  );
 
   await page.route('**/api/v1/members**', async (route) => {
     const request = route.request();
@@ -97,7 +100,10 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('members directory', () => {
   test('navigates to the Members page and lists seeded members', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /members/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /members/i })
+      .click();
 
     await expect(page).toHaveURL(/\/members$/);
     await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible();
@@ -105,7 +111,10 @@ test.describe('members directory', () => {
   });
 
   test('adds a new member', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /members/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /members/i })
+      .click();
     await expect(page).toHaveURL(/\/members$/);
 
     const dialog = page.getByRole('dialog');
@@ -119,7 +128,10 @@ test.describe('members directory', () => {
   });
 
   test('edits an existing member', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /members/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /members/i })
+      .click();
     await expect(page).toHaveURL(/\/members$/);
 
     await page.getByRole('button', { name: /edit katherine johnson/i }).click();
@@ -132,7 +144,10 @@ test.describe('members directory', () => {
   });
 
   test('deletes a member after confirmation', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /members/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /members/i })
+      .click();
     await expect(page).toHaveURL(/\/members$/);
 
     await page.getByRole('button', { name: /delete katherine johnson/i }).click();

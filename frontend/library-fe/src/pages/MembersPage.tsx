@@ -113,10 +113,11 @@ export function MembersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, rowsPerPage, sortBy, sortDir, debouncedName, debouncedEmail, filters.status]);
 
-  const handleFilterChange = (field: 'name' | 'email') => (event: ChangeEvent<HTMLInputElement>) => {
-    setFilters((prev) => ({ ...prev, [field]: event.target.value }));
-    setPage(0);
-  };
+  const handleFilterChange =
+    (field: 'name' | 'email') => (event: ChangeEvent<HTMLInputElement>) => {
+      setFilters((prev) => ({ ...prev, [field]: event.target.value }));
+      setPage(0);
+    };
 
   const handleStatusFilterChange = (event: SelectChangeEvent<MembershipStatus | ''>) => {
     setFilters((prev) => ({ ...prev, status: event.target.value }));

@@ -31,9 +31,7 @@ describe('FeedbackSnackbar', () => {
   it('calls onClose when the alert is dismissed', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    render(
-      <FeedbackSnackbar open message="Saved." severity="success" onClose={onClose} />,
-    );
+    render(<FeedbackSnackbar open message="Saved." severity="success" onClose={onClose} />);
 
     await user.click(screen.getByRole('button', { name: /close/i }));
 

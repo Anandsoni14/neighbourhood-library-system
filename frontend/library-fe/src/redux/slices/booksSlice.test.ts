@@ -73,7 +73,10 @@ describe('booksSlice', () => {
     let state = booksReducer(initialState, fetchBooks.pending('old-request', arg));
     state = booksReducer(state, fetchBooks.pending('new-request', arg));
 
-    state = booksReducer(state, fetchBooks.fulfilled({ items: [book], total: 1 }, 'old-request', arg));
+    state = booksReducer(
+      state,
+      fetchBooks.fulfilled({ items: [book], total: 1 }, 'old-request', arg),
+    );
 
     expect(state.items).toEqual([]);
     expect(state.status).toBe(RequestStatus.LOADING);

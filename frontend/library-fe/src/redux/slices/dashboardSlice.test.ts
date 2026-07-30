@@ -73,11 +73,21 @@ describe('dashboardSlice', () => {
   it('ignores a stale fetchDashboard.fulfilled response from a superseded request', () => {
     let state = dashboardReducer(
       initialState,
-      fetchDashboard.pending('old-request', { skip: 0, limit: 25, sortBy: 'due_at', sortDir: 'asc' }),
+      fetchDashboard.pending('old-request', {
+        skip: 0,
+        limit: 25,
+        sortBy: 'due_at',
+        sortDir: 'asc',
+      }),
     );
     state = dashboardReducer(
       state,
-      fetchDashboard.pending('new-request', { skip: 0, limit: 25, sortBy: 'due_at', sortDir: 'asc' }),
+      fetchDashboard.pending('new-request', {
+        skip: 0,
+        limit: 25,
+        sortBy: 'due_at',
+        sortDir: 'asc',
+      }),
     );
 
     state = dashboardReducer(

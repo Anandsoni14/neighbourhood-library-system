@@ -70,7 +70,10 @@ describe('loansSlice', () => {
     let state = loansReducer(initialState, fetchLoans.pending('old-request', arg));
     state = loansReducer(state, fetchLoans.pending('new-request', arg));
 
-    state = loansReducer(state, fetchLoans.fulfilled({ items: [loan], total: 1 }, 'old-request', arg));
+    state = loansReducer(
+      state,
+      fetchLoans.fulfilled({ items: [loan], total: 1 }, 'old-request', arg),
+    );
 
     expect(state.items).toEqual([]);
     expect(state.status).toBe(RequestStatus.LOADING);

@@ -110,7 +110,11 @@ describe('membersSlice', () => {
         'requestId',
         {
           memberId: '1',
-          payload: { first_name: member.first_name, last_name: member.last_name, email: member.email },
+          payload: {
+            first_name: member.first_name,
+            last_name: member.last_name,
+            email: member.email,
+          },
         },
         'Unable to update the member.',
       ),

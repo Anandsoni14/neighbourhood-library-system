@@ -168,9 +168,10 @@ test.describe('dashboard', () => {
     await expect(page.getByText('Grace Hopper')).toBeVisible();
     await expect(page.getByText(/Clean Code \(BC-001\)/)).toBeVisible();
 
-    await expect(
-      page.getByRole('main').getByRole('link', { name: /books/i }),
-    ).toHaveAttribute('href', '/books');
+    await expect(page.getByRole('main').getByRole('link', { name: /books/i })).toHaveAttribute(
+      'href',
+      '/books',
+    );
   });
 
   test('returns an overdue loan directly from the dashboard', async ({ page }) => {

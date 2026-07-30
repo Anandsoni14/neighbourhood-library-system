@@ -72,7 +72,13 @@ describe('IssueLoanDialog', () => {
 
     const onSubmit = vi.fn();
     render(
-      <IssueLoanDialog open isSubmitting={false} error={null} onClose={vi.fn()} onSubmit={onSubmit} />,
+      <IssueLoanDialog
+        open
+        isSubmitting={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
     );
 
     const bookInput = screen.getByLabelText('Book');
@@ -113,11 +119,19 @@ describe('IssueLoanDialog', () => {
 
   it('blocks submission until a copy and member are selected', async () => {
     const user = userEvent.setup();
-    vi.mocked(httpClient.get).mockResolvedValue({ data: { items: [], total: 0, skip: 0, limit: 25 } });
+    vi.mocked(httpClient.get).mockResolvedValue({
+      data: { items: [], total: 0, skip: 0, limit: 25 },
+    });
 
     const onSubmit = vi.fn();
     render(
-      <IssueLoanDialog open isSubmitting={false} error={null} onClose={vi.fn()} onSubmit={onSubmit} />,
+      <IssueLoanDialog
+        open
+        isSubmitting={false}
+        error={null}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
     );
 
     await user.click(screen.getByRole('button', { name: 'Issue loan' }));

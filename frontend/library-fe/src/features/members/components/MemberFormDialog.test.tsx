@@ -96,9 +96,7 @@ describe('MemberFormDialog', () => {
 
     await user.click(screen.getByRole('button', { name: 'Add member' }));
 
-    expect(
-      await screen.findByText(/first name, last name, and email are required/i),
-    ).toBeVisible();
+    expect(await screen.findByText(/first name, last name, and email are required/i)).toBeVisible();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

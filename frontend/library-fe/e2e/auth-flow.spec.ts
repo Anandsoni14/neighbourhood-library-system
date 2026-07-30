@@ -7,15 +7,19 @@ import { expect, type Page, test } from '@playwright/test';
 // (non-JSON) data instead of throwing.
 async function mockDashboardData(page: Page) {
   await page.route('**/api/v1/books**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/members**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/loans**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   // Registered after the broader /loans** mock so it wins (Playwright tries
   // the most-recently-registered matching route first).
   await page.route('**/api/v1/loans/overdue**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }),
+  );
 }
 
 const STAFF_FIXTURE = {

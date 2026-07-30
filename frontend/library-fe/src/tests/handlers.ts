@@ -257,7 +257,8 @@ export const handlers = [
     const name = url.searchParams.get('name');
     const email = url.searchParams.get('email');
     const status = url.searchParams.get('status');
-    const sortBy = (url.searchParams.get('sort_by') ?? 'last_name') as keyof (typeof members)[number];
+    const sortBy = (url.searchParams.get('sort_by') ??
+      'last_name') as keyof (typeof members)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
 
     const filtered = members.filter(
@@ -410,7 +411,8 @@ export const handlers = [
     const memberId = url.searchParams.get('member_id');
     const copyId = url.searchParams.get('copy_id');
     const status = url.searchParams.get('status');
-    const sortBy = (url.searchParams.get('sort_by') ?? 'borrowed_at') as keyof (typeof loans)[number];
+    const sortBy = (url.searchParams.get('sort_by') ??
+      'borrowed_at') as keyof (typeof loans)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'desc';
 
     const filtered = loans.filter(
@@ -520,7 +522,10 @@ export const handlers = [
   }),
 
   http.post(`${API_ORIGIN}/loans/:loanId/return`, async ({ request, params }) => {
-    const body = (await request.json()) as { return_condition: BookCopy['condition']; remarks?: string | null };
+    const body = (await request.json()) as {
+      return_condition: BookCopy['condition'];
+      remarks?: string | null;
+    };
     const index = loans.findIndex((loan) => loan.loan_id === params.loanId);
     const existingLoan = loans[index];
     if (index === -1 || !existingLoan) {

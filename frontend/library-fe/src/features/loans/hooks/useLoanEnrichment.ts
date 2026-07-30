@@ -56,7 +56,9 @@ export function useLoanEnrichment(loans: Loan[]): LoanEnrichment {
           }
         }),
       );
-      const bookIds = [...new Set(resolvedCopies.filter((copy) => copy !== null).map((copy) => copy.book_id))];
+      const bookIds = [
+        ...new Set(resolvedCopies.filter((copy) => copy !== null).map((copy) => copy.book_id)),
+      ];
       const resolvedBooks = await Promise.all(
         bookIds.map(async (id) => {
           try {

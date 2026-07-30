@@ -57,7 +57,13 @@ export function IssueLoanDialog({
   };
 
   const handleMemberInputChange = (_event: unknown, value: string) => {
-    void fetchMembers({ skip: 0, limit: 25, name: value, sortBy: 'last_name', sortDir: SortDir.ASC });
+    void fetchMembers({
+      skip: 0,
+      limit: 25,
+      name: value,
+      sortBy: 'last_name',
+      sortDir: SortDir.ASC,
+    });
   };
 
   useEffect(() => {
@@ -147,7 +153,9 @@ export function IssueLoanDialog({
             />
             <Autocomplete
               options={members}
-              getOptionLabel={(member) => `${member.first_name} ${member.last_name} (${member.email})`}
+              getOptionLabel={(member) =>
+                `${member.first_name} ${member.last_name} (${member.email})`
+              }
               value={selectedMember}
               onChange={(_event, value) => setSelectedMember(value)}
               onInputChange={handleMemberInputChange}

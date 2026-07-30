@@ -40,11 +40,14 @@ test.beforeEach(async ({ page }) => {
   // The dashboard every visitor lands on after login fetches these — not
   // exercised by this spec, so a minimal empty response is enough.
   await page.route('**/api/v1/members**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/loans**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/loans/overdue**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }),
+  );
 
   await page.route('**/api/v1/books**', async (route) => {
     const request = route.request();

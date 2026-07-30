@@ -41,8 +41,7 @@ export function useLoans() {
   );
 
   const returnLoan = useCallback(
-    (loanId: string, payload: LoanReturnRequest) =>
-      dispatch(returnLoanThunk({ loanId, payload })),
+    (loanId: string, payload: LoanReturnRequest) => dispatch(returnLoanThunk({ loanId, payload })),
     [dispatch],
   );
 

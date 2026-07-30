@@ -51,13 +51,17 @@ test.beforeEach(async ({ page }) => {
   // The dashboard every visitor lands on after login fetches these — not
   // exercised by this spec, so a minimal empty response is enough.
   await page.route('**/api/v1/books**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/members**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/loans**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
   await page.route('**/api/v1/loans/overdue**', (route) =>
-    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }));
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }),
+  );
 
   await page.route('**/api/v1/book-copies**', async (route) => {
     const request = route.request();
@@ -120,7 +124,10 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('copies inventory', () => {
   test('navigates to the Copies page and lists seeded copies', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /copies/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /copies/i })
+      .click();
 
     await expect(page).toHaveURL(/\/copies$/);
     await expect(page.getByRole('heading', { name: 'Copies' })).toBeVisible();
@@ -128,7 +135,10 @@ test.describe('copies inventory', () => {
   });
 
   test('adds a new copy', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /copies/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /copies/i })
+      .click();
     await expect(page).toHaveURL(/\/copies$/);
 
     const dialog = page.getByRole('dialog');
@@ -141,7 +151,10 @@ test.describe('copies inventory', () => {
   });
 
   test('edits an existing copy', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /copies/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /copies/i })
+      .click();
     await expect(page).toHaveURL(/\/copies$/);
 
     await page.getByRole('button', { name: 'Edit BC-001' }).click();
@@ -154,7 +167,10 @@ test.describe('copies inventory', () => {
   });
 
   test('deletes a copy after confirmation', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /copies/i }).click();
+    await page
+      .getByRole('navigation')
+      .getByRole('link', { name: /copies/i })
+      .click();
     await expect(page).toHaveURL(/\/copies$/);
 
     await page.getByRole('button', { name: 'Delete BC-001' }).click();
