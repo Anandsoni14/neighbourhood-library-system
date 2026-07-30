@@ -1,8 +1,11 @@
 import logging
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
+from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import (
     LoanMemberMismatchException,
@@ -10,6 +13,7 @@ from core.exceptions import (
     TransactionNotFoundException,
     TransactionNotPendingException,
 )
+from core.pagination import SortDir
 from models import Transaction
 from models.enums import PaymentMode, TransactionStatus, TransactionType
 from repositories.loan import LoanRepository
@@ -142,19 +146,38 @@ class TransactionService:
             raise TransactionNotFoundException(f"Transaction {transaction_id} not found")
         return transaction
 
-    async def list_transactions(self, limit: int = 100, offset: int = 0) -> list[Transaction]:
-        """List all transactions with pagination."""
-        all_transactions = await self.repository.list_all()
-        return list(all_transactions)[offset : offset + limit]
+    async def list_transactions(
+        self,
+        *,
+        member_id: UUID | None = None,
+        loan_id: UUID | None = None,
+        status: TransactionStatus | None = None,
+        transaction_type: TransactionType | None = None,
+        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_dir: SortDir = SortDir.ASC,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Transaction], int]:
+        """List transactions matching every supplied filter, returning page and total.
 
-    async def list_transactions_by_member(self, member_id: UUID) -> list[Transaction]:
-        """List all transactions for a given member."""
-        return await self.repository.list_by_member(member_id)
+        Filters combine, so "this member's outstanding fees" — member plus
+        PENDING status — is a single request.
+        """
+        filters: list[ColumnElement[bool]] = []
+        if member_id is not None:
+            filters.append(Transaction.member_id == member_id)
+        if loan_id is not None:
+            filters.append(Transaction.loan_id == loan_id)
+        if status is not None:
+            filters.append(Transaction.status == status)
+        if transaction_type is not None:
+            filters.append(Transaction.transaction_type == transaction_type)
 
-    async def list_transactions_by_loan(self, loan_id: UUID) -> list[Transaction]:
-        """List all transactions for a given loan."""
-        return await self.repository.list_by_loan(loan_id)
-
-    async def list_transactions_by_status(self, status: TransactionStatus) -> list[Transaction]:
-        """List all transactions with a given status."""
-        return await self.repository.list_by_status(status)
+        transactions, total = await self.repository.list_paginated(
+            filters=filters,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
+        return list(transactions), total

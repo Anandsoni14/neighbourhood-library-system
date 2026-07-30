@@ -2,10 +2,13 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import ConflictError, NotFoundError
+from core.pagination import SortDir
 from models import Member
 from models.enums import MembershipStatus
 from repositories.member import MemberRepository
@@ -78,14 +81,39 @@ class MemberService:
             raise NotFoundError(f"Member {member_id} not found")
         return member
 
-    async def list_members(self, limit: int = 100, offset: int = 0) -> list[Member]:
-        """List all members with pagination."""
-        all_members = await self.repository.list_all()
-        return list(all_members)[offset : offset + limit]
+    async def list_members(
+        self,
+        *,
+        status: MembershipStatus | None = None,
+        name: str | None = None,
+        email: str | None = None,
+        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_dir: SortDir = SortDir.ASC,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Member], int]:
+        """List members matching every supplied filter, returning the page and total.
 
-    async def list_members_by_status(self, status: MembershipStatus) -> list[Member]:
-        """List all members with a given membership status."""
-        return await self.repository.list_by_status(status)
+        `name` matches either the first or last name, so a single search box can
+        find "Ada" and "Lovelace" alike.
+        """
+        filters: list[ColumnElement[bool]] = []
+        if status is not None:
+            filters.append(Member.membership_status == status)
+        if name:
+            pattern = f"%{name}%"
+            filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
+        if email:
+            filters.append(Member.email.ilike(f"%{email}%"))
+
+        members, total = await self.repository.list_paginated(
+            filters=filters,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
+        return list(members), total
 
     async def update_member(self, member_id: UUID, **fields: Any) -> Member:
         """Update member fields. Email and government ID combo must remain unique."""
@@ -131,9 +159,3 @@ class MemberService:
                 f"Cannot delete member {member_id}: it has associated loan or transaction records"
             ) from e
         logger.info("member_deleted", extra={"member_id": str(member_id)})
-
-    async def search_members(self, name: str | None = None) -> list[Member]:
-        """Search members by first or last name."""
-        if name:
-            return await self.repository.search_by_name(name)
-        return list(await self.repository.list_all())

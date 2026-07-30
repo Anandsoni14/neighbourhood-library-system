@@ -2,10 +2,13 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import ConflictError, NotFoundError
+from core.pagination import SortDir
 from core.security import hash_password
 from models import Staff
 from models.enums import StaffRole, StaffStatus
@@ -68,10 +71,35 @@ class StaffService:
             raise NotFoundError(f"Staff {staff_id} not found")
         return staff
 
-    async def list_staff(self, limit: int = 100, offset: int = 0) -> list[Staff]:
-        """List all staff with pagination."""
-        all_staff = await self.repository.list_all()
-        return list(all_staff)[offset : offset + limit]
+    async def list_staff(
+        self,
+        *,
+        role: StaffRole | None = None,
+        status: StaffStatus | None = None,
+        name: str | None = None,
+        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_dir: SortDir = SortDir.ASC,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Staff], int]:
+        """List staff matching every supplied filter, returning the page and total."""
+        filters: list[ColumnElement[bool]] = []
+        if role is not None:
+            filters.append(Staff.role == role)
+        if status is not None:
+            filters.append(Staff.status == status)
+        if name:
+            pattern = f"%{name}%"
+            filters.append(Staff.first_name.ilike(pattern) | Staff.last_name.ilike(pattern))
+
+        staff, total = await self.repository.list_paginated(
+            filters=filters,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
+        return list(staff), total
 
     async def update_staff(self, staff_id: UUID, **fields: Any) -> Staff:
         """Update staff fields. Employee code and email must remain unique.

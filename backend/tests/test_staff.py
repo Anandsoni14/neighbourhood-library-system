@@ -234,7 +234,9 @@ class TestStaffAPI:
     ) -> None:
         response = await client.get("/api/v1/staff", headers=admin_headers)
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data["items"], list)
+        assert isinstance(data["total"], int)
 
     async def test_get_staff_endpoint(
         self, client: AsyncClient, admin_headers: dict[str, str]

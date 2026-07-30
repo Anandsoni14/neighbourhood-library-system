@@ -3,11 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import BaseRepository
 from models import Member
-from models.enums import MembershipStatus
 
 
 class MemberRepository(BaseRepository[Member]):
-    """Member repository with lookup and filtering capabilities."""
+    """Member repository with lookup capabilities."""
 
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, Member)
@@ -28,20 +27,3 @@ class MemberRepository(BaseRepository[Member]):
             )
         )
         return result.scalar_one_or_none()
-
-    async def search_by_name(self, name: str) -> list[Member]:
-        """Search members by first or last name (case-insensitive substring match)."""
-        pattern = f"%{name}%"
-        result = await self._session.execute(
-            select(Member).where(
-                (Member.first_name.ilike(pattern)) | (Member.last_name.ilike(pattern))
-            )
-        )
-        return list(result.scalars().all())
-
-    async def list_by_status(self, status: MembershipStatus) -> list[Member]:
-        """List all members with a given membership status."""
-        result = await self._session.execute(
-            select(Member).where(Member.membership_status == status)
-        )
-        return list(result.scalars().all())

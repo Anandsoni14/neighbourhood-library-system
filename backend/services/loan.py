@@ -2,11 +2,13 @@ import logging
 import math
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import NamedTuple
+from typing import Any, NamedTuple
 from uuid import UUID
 
+from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute, selectinload
 
 from core.exceptions import (
     BookUnavailableException,
@@ -15,6 +17,7 @@ from core.exceptions import (
     MemberNotEligibleException,
     NotFoundError,
 )
+from core.pagination import SortDir
 from models import Loan
 from models.enums import CopyCondition, CopyStatus, LoanStatus, MembershipStatus
 from repositories.book_copy import BookCopyRepository
@@ -185,26 +188,65 @@ class LoanService:
             raise LoanNotFoundException(f"Loan {loan_id} not found")
         return loan
 
-    async def list_loans(self, limit: int = 100, offset: int = 0) -> list[Loan]:
-        """List all loans with pagination."""
-        all_loans = await self.repository.list_all()
-        return list(all_loans)[offset : offset + limit]
+    async def list_loans(
+        self,
+        *,
+        member_id: UUID | None = None,
+        copy_id: UUID | None = None,
+        status: LoanStatus | None = None,
+        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_dir: SortDir = SortDir.ASC,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Loan], int]:
+        """List loans matching every supplied filter, returning the page and total.
 
-    async def list_loans_by_member(self, member_id: UUID) -> list[Loan]:
-        """List all loans for a given member."""
-        return await self.repository.list_by_member(member_id)
+        Filters combine, so "this member's active loans" — the question asked on
+        every checkout — is one request rather than a client-side intersection.
+        """
+        filters: list[ColumnElement[bool]] = []
+        if member_id is not None:
+            filters.append(Loan.member_id == member_id)
+        if copy_id is not None:
+            filters.append(Loan.copy_id == copy_id)
+        if status is not None:
+            filters.append(Loan.status == status)
 
-    async def list_loans_by_status(self, status: LoanStatus) -> list[Loan]:
-        """List all loans with a given status."""
-        return await self.repository.list_by_status(status)
+        loans, total = await self.repository.list_paginated(
+            filters=filters,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
+        return list(loans), total
 
-    async def get_overdue_loans(self, as_of: datetime | None = None) -> list[OverdueLoan]:
+    async def get_overdue_loans(
+        self,
+        as_of: datetime | None = None,
+        *,
+        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_dir: SortDir = SortDir.ASC,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[OverdueLoan], int]:
         """List ACTIVE loans past due, with each one's current overdue day count
         and estimated fine (the loan hasn't been returned, so calculated_fine is
-        still 0 on the row itself)."""
+        still 0 on the row itself).
+
+        The copy is eager-loaded because late_fee_per_day is needed for every
+        row and the relationship is lazy="raise".
+        """
         as_of = as_of or datetime.now(UTC)
-        loans = await self.repository.list_overdue(as_of)
-        return [
+        loans, total = await self.repository.list_paginated(
+            filters=[Loan.status == LoanStatus.ACTIVE, Loan.due_at < as_of],
+            options=[selectinload(Loan.copy)],
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
+        overdue = [
             OverdueLoan(
                 loan=loan,
                 days_overdue=self._overdue_days(loan.due_at, as_of),
@@ -212,3 +254,4 @@ class LoanService:
             )
             for loan in loans
         ]
+        return overdue, total
