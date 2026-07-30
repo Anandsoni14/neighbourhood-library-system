@@ -24,6 +24,10 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
+    // Pinned rather than left to jsdom's default so it can't silently drift
+    // across jsdom/vitest versions — src/tests/handlers.ts matches MSW
+    // handlers against this exact origin.
+    environmentOptions: { jsdom: { url: 'http://localhost:3000' } },
     globals: true,
     setupFiles: ['./src/tests/setup.ts'],
     css: true,

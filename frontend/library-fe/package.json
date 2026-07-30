@@ -11,9 +11,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc -b --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
+    "test:watch": "NODE_OPTIONS=--no-experimental-webstorage vitest",
+    "test:coverage": "NODE_OPTIONS=--no-experimental-webstorage vitest run --coverage",
     "e2e": "playwright test",
     "e2e:install": "playwright install --with-deps chromium"
   },

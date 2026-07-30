@@ -48,6 +48,10 @@ export default defineConfig([
     files: ['src/tests/**', '**/*.test.{ts,tsx}'],
     rules: {
       'react-refresh/only-export-components': 'off',
+      // vi.mocked(httpClient.post) and expect(httpClient.post).toHaveBeenCalledWith(...)
+      // both extract a method reference to mock/assert on it; unbound-method's
+      // "this" concern doesn't apply to vitest's mock bookkeeping.
+      '@typescript-eslint/unbound-method': 'off',
     },
   },
   // Must be last: turns off stylistic rules that conflict with Prettier's formatting.
