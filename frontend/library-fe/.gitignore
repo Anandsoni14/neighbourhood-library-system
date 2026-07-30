@@ -11,6 +11,16 @@ node_modules
 dist
 dist-ssr
 *.local
+.env.local
+.env.*.local
+
+# Test artifacts
+coverage
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
 
 # Editor directories and files
 .vscode/*
