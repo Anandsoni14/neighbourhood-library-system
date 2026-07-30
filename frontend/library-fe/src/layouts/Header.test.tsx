@@ -20,7 +20,7 @@ describe('Header', () => {
   it('renders the application title', () => {
     render(<Header />);
 
-    expect(screen.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Neighbour Library' })).toBeVisible();
   });
 
   it('shows the signed-in staff name and role when authenticated', () => {

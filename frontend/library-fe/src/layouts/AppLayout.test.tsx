@@ -15,7 +15,7 @@ describe('AppLayout', () => {
       </Routes>,
     );
 
-    expect(screen.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Neighbour Library' })).toBeVisible();
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeVisible();
     expect(screen.getByText('Page content')).toBeVisible();
   });

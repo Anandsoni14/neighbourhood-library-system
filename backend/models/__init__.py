@@ -1,4 +1,5 @@
 from models.book import Book, BookCopy
+from models.category import Category
 from models.enums import (
     CopyCondition,
     CopyStatus,
@@ -18,6 +19,7 @@ from models.transaction import Transaction
 __all__ = [
     "Book",
     "BookCopy",
+    "Category",
     "CopyCondition",
     "CopyStatus",
     "Loan",

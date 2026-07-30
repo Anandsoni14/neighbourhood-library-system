@@ -53,9 +53,11 @@ const book = {
   author: 'Robert C. Martin',
   publisher: null,
   isbn: null,
+  category_id: null,
   category: null,
   description: null,
   published_year: 2008,
+  is_archived: false,
 };
 
 function loanFor(id: string, memberId: string, copyId: string): Loan {

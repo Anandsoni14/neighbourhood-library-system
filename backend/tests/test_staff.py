@@ -2,45 +2,13 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ConflictError, NotFoundError
 from core.security import create_access_token, verify_password
 from models.enums import StaffRole, StaffStatus
 from services.staff import StaffService
 
-
-@pytest.fixture
-async def staff_service(db: AsyncSession) -> StaffService:
-    return StaffService(db)
-
-
-@pytest.fixture
-async def admin_headers(staff_service: StaffService) -> dict[str, str]:
-    admin = await staff_service.create_staff(
-        employee_code=f"ADMIN-{uuid4().hex[:8]}",
-        first_name="Admin",
-        last_name="User",
-        email=f"{uuid4()}@library.com",
-        password="adminpass123",
-        role=StaffRole.ADMIN,
-    )
-    token = create_access_token(admin.staff_id, admin.role)
-    return {"Authorization": f"Bearer {token}"}
-
-
-@pytest.fixture
-async def librarian_headers(staff_service: StaffService) -> dict[str, str]:
-    librarian = await staff_service.create_staff(
-        employee_code=f"LIB-{uuid4().hex[:8]}",
-        first_name="Lib",
-        last_name="User",
-        email=f"{uuid4()}@library.com",
-        password="libpassword123",
-        role=StaffRole.LIBRARIAN,
-    )
-    token = create_access_token(librarian.staff_id, librarian.role)
-    return {"Authorization": f"Bearer {token}"}
+# staff_service, admin_headers, and librarian_headers fixtures live in conftest.py.
 
 
 class TestStaffService:
@@ -138,6 +106,14 @@ class TestStaffService:
         assert not verify_password("oldpassword1", updated.password_hash)
 
     async def test_deactivate_staff(self, staff_service: StaffService) -> None:
+        acting_admin = await staff_service.create_staff(
+            employee_code="EMP-399",
+            first_name="Acting",
+            last_name="Admin",
+            email="acting-admin@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
         staff = await staff_service.create_staff(
             employee_code="EMP-400",
             first_name="Dan",
@@ -145,8 +121,113 @@ class TestStaffService:
             email="dan@library.com",
             password="password123",
         )
-        deactivated = await staff_service.deactivate_staff(staff.staff_id)
+        deactivated = await staff_service.deactivate_staff(
+            staff.staff_id, acting_staff_id=acting_admin.staff_id
+        )
         assert deactivated.status == StaffStatus.INACTIVE
+
+    async def test_deactivate_staff_is_idempotent(self, staff_service: StaffService) -> None:
+        acting_admin = await staff_service.create_staff(
+            employee_code="EMP-401",
+            first_name="Acting",
+            last_name="Admin",
+            email="acting-admin2@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
+        staff = await staff_service.create_staff(
+            employee_code="EMP-402",
+            first_name="Gail",
+            last_name="Staff",
+            email="gail@library.com",
+            password="password123",
+        )
+        await staff_service.deactivate_staff(staff.staff_id, acting_staff_id=acting_admin.staff_id)
+        deactivated_again = await staff_service.deactivate_staff(
+            staff.staff_id, acting_staff_id=acting_admin.staff_id
+        )
+        assert deactivated_again.status == StaffStatus.INACTIVE
+
+    async def test_deactivate_staff_refuses_self_deactivation(
+        self, staff_service: StaffService
+    ) -> None:
+        admin = await staff_service.create_staff(
+            employee_code="EMP-403",
+            first_name="Solo",
+            last_name="Admin",
+            email="solo-admin@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
+        with pytest.raises(ConflictError):
+            await staff_service.deactivate_staff(admin.staff_id, acting_staff_id=admin.staff_id)
+
+    async def test_deactivate_staff_refuses_last_active_admin(
+        self, staff_service: StaffService
+    ) -> None:
+        only_admin = await staff_service.create_staff(
+            employee_code="EMP-404",
+            first_name="Only",
+            last_name="Admin",
+            email="only-admin@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
+        other_staff = await staff_service.create_staff(
+            employee_code="EMP-405",
+            first_name="Other",
+            last_name="Staff",
+            email="other-staff@library.com",
+            password="password123",
+        )
+        with pytest.raises(ConflictError):
+            await staff_service.deactivate_staff(
+                only_admin.staff_id, acting_staff_id=other_staff.staff_id
+            )
+
+    async def test_deactivate_staff_allows_when_another_admin_remains(
+        self, staff_service: StaffService
+    ) -> None:
+        first_admin = await staff_service.create_staff(
+            employee_code="EMP-406",
+            first_name="First",
+            last_name="Admin",
+            email="first-admin@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
+        second_admin = await staff_service.create_staff(
+            employee_code="EMP-407",
+            first_name="Second",
+            last_name="Admin",
+            email="second-admin@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
+        deactivated = await staff_service.deactivate_staff(
+            first_admin.staff_id, acting_staff_id=second_admin.staff_id
+        )
+        assert deactivated.status == StaffStatus.INACTIVE
+
+    async def test_activate_staff(self, staff_service: StaffService) -> None:
+        acting_admin = await staff_service.create_staff(
+            employee_code="EMP-408",
+            first_name="Acting",
+            last_name="Admin",
+            email="acting-admin3@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
+        staff = await staff_service.create_staff(
+            employee_code="EMP-409",
+            first_name="Hana",
+            last_name="Staff",
+            email="hana@library.com",
+            password="password123",
+        )
+        await staff_service.deactivate_staff(staff.staff_id, acting_staff_id=acting_admin.staff_id)
+        reactivated = await staff_service.activate_staff(staff.staff_id)
+        assert reactivated.status == StaffStatus.ACTIVE
 
     async def test_delete_staff(self, staff_service: StaffService) -> None:
         staff = await staff_service.create_staff(
@@ -356,3 +437,107 @@ class TestStaffAPI:
 
         response = await client.get(f"/api/v1/staff/{staff_id}", headers=admin_headers)
         assert response.status_code == 404
+
+    async def test_deactivate_staff_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-007",
+                "first_name": "Grace",
+                "last_name": "Staff",
+                "email": "grace.api@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+
+        response = await client.post(f"/api/v1/staff/{staff_id}/deactivate", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "INACTIVE"
+
+    async def test_activate_staff_endpoint(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-008",
+                "first_name": "Henry",
+                "last_name": "Staff",
+                "email": "henry.api@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+        await client.post(f"/api/v1/staff/{staff_id}/deactivate", headers=admin_headers)
+
+        response = await client.post(f"/api/v1/staff/{staff_id}/activate", headers=admin_headers)
+        assert response.status_code == 200
+        assert response.json()["status"] == "ACTIVE"
+
+    async def test_deactivate_staff_endpoint_librarian_forbidden_403(
+        self, client: AsyncClient, admin_headers: dict[str, str], librarian_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-009",
+                "first_name": "Iris",
+                "last_name": "Staff",
+                "email": "iris.api@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+
+        response = await client.post(
+            f"/api/v1/staff/{staff_id}/deactivate", headers=librarian_headers
+        )
+        assert response.status_code == 403
+
+    async def test_deactivate_staff_endpoint_refuses_self_deactivation(
+        self, client: AsyncClient, staff_service: StaffService
+    ) -> None:
+        admin = await staff_service.create_staff(
+            employee_code="API-010",
+            first_name="Self",
+            last_name="Admin",
+            email="self-admin@library.com",
+            password="supersecret123",
+            role=StaffRole.ADMIN,
+        )
+        headers = {"Authorization": f"Bearer {create_access_token(admin.staff_id, admin.role)}"}
+
+        response = await client.post(f"/api/v1/staff/{admin.staff_id}/deactivate", headers=headers)
+        assert response.status_code == 409
+
+    async def test_deactivate_staff_endpoint_allows_when_another_admin_remains(
+        self, client: AsyncClient, staff_service: StaffService, admin_headers: dict[str, str]
+    ) -> None:
+        # `admin_headers` created one ADMIN (the caller); deactivating a
+        # second ADMIN here still leaves that first one active, so it's
+        # allowed. (The "last admin" refusal itself is only reachable at the
+        # service layer — see test_deactivate_staff_refuses_last_active_admin
+        # — because the HTTP endpoint requires the caller to be a *second*
+        # ACTIVE ADMIN, and self-deactivation is refused separately, so by
+        # the time a request can even reach this handler there are always at
+        # least two active admins in play.)
+        second_admin = await staff_service.create_staff(
+            employee_code="API-011",
+            first_name="Second",
+            last_name="Admin",
+            email="second-admin-api@library.com",
+            password="supersecret123",
+            role=StaffRole.ADMIN,
+        )
+
+        response = await client.post(
+            f"/api/v1/staff/{second_admin.staff_id}/deactivate", headers=admin_headers
+        )
+        assert response.status_code == 200
+        assert response.json()["status"] == "INACTIVE"

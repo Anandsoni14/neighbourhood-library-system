@@ -1,5 +1,10 @@
 -- =====================================================================
 -- Neighborhood Library App - PostgreSQL Schema
+--
+-- STALE: kept for historical reference only. Alembic (backend/alembic/) is
+-- the source of truth for the schema; this file has not been updated since
+-- the category table / book.is_archived migration and does not reflect the
+-- current schema. Run `uv run alembic upgrade head`, not this file.
 -- =====================================================================
 
 DROP TABLE IF EXISTS transaction CASCADE;

@@ -50,8 +50,7 @@ describe('ReturnLoanDialog', () => {
     });
   });
 
-  it('blocks submission when no condition is selected', async () => {
-    const user = userEvent.setup();
+  it('blocks submission when no condition is selected', () => {
     const onSubmit = vi.fn();
     render(
       <ReturnLoanDialog
@@ -64,9 +63,9 @@ describe('ReturnLoanDialog', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Return' }));
-
-    expect(await screen.findByText(/return condition is required/i)).toBeVisible();
+    // The submit button stays disabled until a return condition is chosen,
+    // rather than allowing a click that then surfaces an error.
+    expect(screen.getByRole('button', { name: 'Return' })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

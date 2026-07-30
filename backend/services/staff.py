@@ -143,9 +143,46 @@ class StaffService:
         logger.info("staff_password_changed", extra={"staff_id": str(staff_id)})
         return staff
 
-    async def deactivate_staff(self, staff_id: UUID) -> Staff:
-        """Set a staff member's status to INACTIVE (soft-disable, not deletion)."""
-        return await self.update_staff(staff_id, status=StaffStatus.INACTIVE)
+    async def deactivate_staff(self, staff_id: UUID, *, acting_staff_id: UUID) -> Staff:
+        """Set a staff member's status to INACTIVE (soft-disable, not deletion).
+
+        Two guards that a generic `update_staff(status=...)` call cannot express
+        because it doesn't know the caller's intent is specifically "deactivate":
+
+        - An ADMIN cannot deactivate themselves: `api/deps.get_current_staff`
+          re-checks status == ACTIVE on every request, so this would invalidate
+          the caller's own token mid-request.
+        - The last remaining ACTIVE ADMIN cannot be deactivated: doing so would
+          lock every ADMIN-only endpoint — including this one — with no recovery
+          short of a direct database edit.
+        """
+        if staff_id == acting_staff_id:
+            raise ConflictError("You cannot deactivate your own account")
+
+        staff = await self.get_staff(staff_id)
+        if staff.role == StaffRole.ADMIN and staff.status == StaffStatus.ACTIVE:
+            active_admins = await self.repository.count_active_admins()
+            if active_admins <= 1:
+                raise ConflictError("Cannot deactivate the last remaining active admin")
+
+        if staff.status == StaffStatus.INACTIVE:
+            return staff
+        staff.status = StaffStatus.INACTIVE
+        self._session.add(staff)
+        await self._session.flush()
+        logger.info("staff_deactivated", extra={"staff_id": str(staff_id)})
+        return staff
+
+    async def activate_staff(self, staff_id: UUID) -> Staff:
+        """Set a staff member's status to ACTIVE. Idempotent."""
+        staff = await self.get_staff(staff_id)
+        if staff.status == StaffStatus.ACTIVE:
+            return staff
+        staff.status = StaffStatus.ACTIVE
+        self._session.add(staff)
+        await self._session.flush()
+        logger.info("staff_activated", extra={"staff_id": str(staff_id)})
+        return staff
 
     async def delete_staff(self, staff_id: UUID) -> None:
         """Delete a staff member. Fails if the staff has associated loan records."""

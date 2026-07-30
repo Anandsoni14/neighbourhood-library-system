@@ -1,4 +1,5 @@
 import Alert from '@mui/material/Alert';
+import Autocomplete from '@mui/material/Autocomplete';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
@@ -14,6 +15,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import { type ChangeEvent, type FormEvent, useState } from 'react';
 
+import type { Book } from '@/features/books/types/book.types';
 import { CopyCondition, CopyStatus } from '@/types/api';
 
 import type { BookCopy, BookCopyRequest, BookCopyUpdateRequest } from '../types/copy.types';
@@ -21,6 +23,8 @@ import type { BookCopy, BookCopyRequest, BookCopyUpdateRequest } from '../types/
 interface CopyFormDialogProps {
   open: boolean;
   copy: BookCopy | null;
+  /** Books eligible to receive a new copy — only needed (and only rendered) on create. */
+  books: Book[];
   isSubmitting: boolean;
   error: string | null;
   onClose: () => void;
@@ -69,6 +73,7 @@ function valuesFromCopy(copy: BookCopy | null): FormValues {
 export function CopyFormDialog({
   open,
   copy,
+  books,
   isSubmitting,
   error,
   onClose,
@@ -89,11 +94,23 @@ export function CopyFormDialog({
     setValues((prev) => ({ ...prev, status: event.target.value }));
   };
 
+  const maxBorrowDaysValid =
+    values.maxBorrowDays.trim() === '' ||
+    (Number.isInteger(Number(values.maxBorrowDays)) && Number(values.maxBorrowDays) > 0);
+  const lateFeeValid =
+    values.lateFeePerDay.trim() === '' ||
+    (!Number.isNaN(Number(values.lateFeePerDay)) && Number(values.lateFeePerDay) >= 0);
+  // Gated on required-field presence only — the optional numeric fields keep
+  // their existing on-submit validation (below) rather than also disabling
+  // the button, so a typo mid-edit doesn't lock the form before the error
+  // message ever has a chance to explain what's wrong.
+  const canSubmit = (copy !== null || values.bookId.trim().length > 0) && values.barcode.trim().length > 0;
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!copy && !values.bookId.trim()) {
-      setFieldError('Book ID is required.');
+      setFieldError('Book is required.');
       return;
     }
     if (!values.barcode.trim()) {
@@ -148,6 +165,7 @@ export function CopyFormDialog({
   };
 
   const displayedError = fieldError ?? error;
+  const selectedBook = books.find((book) => book.book_id === values.bookId) ?? null;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -157,17 +175,22 @@ export function CopyFormDialog({
           <Stack spacing={2}>
             {displayedError && <Alert severity="error">{displayedError}</Alert>}
             <Grid container spacing={2}>
-              <Grid size={6}>
-                <TextField
-                  label="Book ID"
-                  value={values.bookId}
-                  onChange={handleChange('bookId')}
-                  fullWidth
-                  required
-                  disabled={copy !== null}
-                  autoFocus
-                />
-              </Grid>
+              {!copy && (
+                <Grid size={12}>
+                  <Autocomplete
+                    options={books}
+                    getOptionLabel={(book) => `${book.title} — ${book.author}`}
+                    value={selectedBook}
+                    onChange={(_event, newValue) => {
+                      setValues((prev) => ({ ...prev, bookId: newValue?.book_id ?? '' }));
+                    }}
+                    isOptionEqualToValue={(option, value) => option.book_id === value.book_id}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Book" required autoFocus />
+                    )}
+                  />
+                </Grid>
+              )}
               <Grid size={6}>
                 <TextField
                   label="Barcode"
@@ -175,6 +198,7 @@ export function CopyFormDialog({
                   onChange={handleChange('barcode')}
                   fullWidth
                   required
+                  autoFocus={copy !== null}
                 />
               </Grid>
               <Grid size={6}>
@@ -226,6 +250,8 @@ export function CopyFormDialog({
                   onChange={handleChange('maxBorrowDays')}
                   fullWidth
                   inputMode="numeric"
+                  error={!maxBorrowDaysValid}
+                  helperText={maxBorrowDaysValid ? ' ' : 'Positive whole number.'}
                 />
               </Grid>
               <Grid size={6}>
@@ -235,6 +261,8 @@ export function CopyFormDialog({
                   onChange={handleChange('lateFeePerDay')}
                   fullWidth
                   inputMode="decimal"
+                  error={!lateFeeValid}
+                  helperText={lateFeeValid ? ' ' : 'Non-negative number.'}
                 />
               </Grid>
             </Grid>
@@ -244,7 +272,7 @@ export function CopyFormDialog({
           <Button onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !canSubmit}>
             {copy ? 'Save changes' : 'Add copy'}
           </Button>
         </DialogActions>

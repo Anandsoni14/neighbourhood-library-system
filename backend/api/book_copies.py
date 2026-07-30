@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
 from core.pagination import SortDir
 from db.session import get_db
@@ -13,7 +14,11 @@ from models import BookCopy
 from models.enums import CopyCondition, CopyStatus
 from services.book_copy import BookCopyService
 
-router = APIRouter(prefix="/api/v1/book-copies", tags=["book-copies"])
+router = APIRouter(
+    prefix="/api/v1/book-copies",
+    tags=["book-copies"],
+    dependencies=[Depends(get_current_staff)],
+)
 
 
 class BookCopySortField(StrEnum):

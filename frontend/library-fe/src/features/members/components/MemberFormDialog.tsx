@@ -59,6 +59,10 @@ const emptyValues: FormValues = {
   remarks: '',
 };
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^\d{10}$/;
+const POSTAL_CODE_PATTERN = /^\d+$/;
+
 function valuesFromMember(member: Member | null): FormValues {
   if (!member) {
     return emptyValues;
@@ -103,11 +107,30 @@ export function MemberFormDialog({
     setValues((prev) => ({ ...prev, membershipStatus: event.target.value }));
   };
 
+  const emailValid = EMAIL_PATTERN.test(values.email.trim());
+  const phoneValid = values.phoneNumber.trim() === '' || PHONE_PATTERN.test(values.phoneNumber.trim());
+  const postalCodeValid =
+    values.postalCode.trim() === '' || POSTAL_CODE_PATTERN.test(values.postalCode.trim());
+  const canSubmit =
+    values.firstName.trim().length > 0 &&
+    values.lastName.trim().length > 0 &&
+    emailValid &&
+    phoneValid &&
+    postalCodeValid;
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!values.firstName.trim() || !values.lastName.trim() || !values.email.trim()) {
-      setFieldError('First name, last name, and email are required.');
+    if (!values.firstName.trim() || !values.lastName.trim() || !emailValid) {
+      setFieldError('First name, last name, and a valid email are required.');
+      return;
+    }
+    if (!phoneValid) {
+      setFieldError('Phone number must be exactly 10 digits.');
+      return;
+    }
+    if (!postalCodeValid) {
+      setFieldError('Postal code must contain digits only.');
       return;
     }
 
@@ -166,6 +189,10 @@ export function MemberFormDialog({
                   onChange={handleChange('email')}
                   fullWidth
                   required
+                  error={values.email.trim().length > 0 && !emailValid}
+                  helperText={
+                    values.email.trim().length > 0 && !emailValid ? 'Enter a valid email address.' : ' '
+                  }
                 />
               </Grid>
               <Grid size={6}>
@@ -174,6 +201,8 @@ export function MemberFormDialog({
                   value={values.phoneNumber}
                   onChange={handleChange('phoneNumber')}
                   fullWidth
+                  error={!phoneValid}
+                  helperText={phoneValid ? ' ' : 'Must be exactly 10 digits.'}
                 />
               </Grid>
               {member && (
@@ -239,6 +268,8 @@ export function MemberFormDialog({
                   value={values.postalCode}
                   onChange={handleChange('postalCode')}
                   fullWidth
+                  error={!postalCodeValid}
+                  helperText={postalCodeValid ? ' ' : 'Digits only.'}
                 />
               </Grid>
               <Grid size={6}>
@@ -266,7 +297,7 @@ export function MemberFormDialog({
           <Button onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !canSubmit}>
             {member ? 'Save changes' : 'Add member'}
           </Button>
         </DialogActions>

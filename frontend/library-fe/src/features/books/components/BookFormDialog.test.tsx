@@ -5,15 +5,19 @@ import { render, screen } from '@/tests/test-utils';
 
 import { BookFormDialog } from './BookFormDialog';
 
+const categories = [{ category_id: 'cat-1', name: 'Software', description: null, is_archived: false }];
+
 const book = {
   book_id: '1',
   title: 'Clean Code',
   author: 'Robert C. Martin',
   publisher: 'Prentice Hall',
   isbn: '9780132350884',
-  category: 'Software',
+  category_id: 'cat-1',
+  category: { category_id: 'cat-1', name: 'Software' },
   description: 'A handbook of agile software craftsmanship.',
   published_year: 2008,
+  is_archived: false,
 };
 
 describe('BookFormDialog', () => {
@@ -24,6 +28,7 @@ describe('BookFormDialog', () => {
       <BookFormDialog
         open
         book={null}
+        categories={categories}
         isSubmitting={false}
         error={null}
         onClose={vi.fn()}
@@ -41,7 +46,7 @@ describe('BookFormDialog', () => {
       author: 'Robert C. Martin',
       publisher: null,
       isbn: null,
-      category: null,
+      category_id: null,
       description: null,
       published_year: null,
     });
@@ -52,6 +57,7 @@ describe('BookFormDialog', () => {
       <BookFormDialog
         open
         book={book}
+        categories={categories}
         isSubmitting={false}
         error={null}
         onClose={vi.fn()}
@@ -64,13 +70,13 @@ describe('BookFormDialog', () => {
     expect(screen.getByDisplayValue('2008')).toBeVisible();
   });
 
-  it('blocks submission when title or author is missing', async () => {
-    const user = userEvent.setup();
+  it('blocks submission when title or author is missing', () => {
     const onSubmit = vi.fn();
     render(
       <BookFormDialog
         open
         book={null}
+        categories={categories}
         isSubmitting={false}
         error={null}
         onClose={vi.fn()}
@@ -78,9 +84,9 @@ describe('BookFormDialog', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Add book' }));
-
-    expect(await screen.findByText(/title and author are required/i)).toBeVisible();
+    // The submit button stays disabled while required fields are empty,
+    // rather than allowing a click that then surfaces a validation message.
+    expect(screen.getByRole('button', { name: 'Add book' })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -91,6 +97,7 @@ describe('BookFormDialog', () => {
       <BookFormDialog
         open
         book={null}
+        categories={categories}
         isSubmitting={false}
         error={null}
         onClose={vi.fn()}
@@ -112,6 +119,7 @@ describe('BookFormDialog', () => {
       <BookFormDialog
         open
         book={null}
+        categories={categories}
         isSubmitting={false}
         error="ISBN already exists."
         onClose={vi.fn()}
@@ -129,6 +137,7 @@ describe('BookFormDialog', () => {
       <BookFormDialog
         open
         book={null}
+        categories={categories}
         isSubmitting={false}
         error={null}
         onClose={onClose}

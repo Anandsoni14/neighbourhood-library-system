@@ -47,6 +47,8 @@ export function ReturnLoanDialog({
     setCondition(event.target.value);
   };
 
+  const canSubmit = condition !== '';
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -97,7 +99,7 @@ export function ReturnLoanDialog({
           <Button onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !canSubmit}>
             Return
           </Button>
         </DialogActions>

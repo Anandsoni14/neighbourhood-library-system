@@ -2,8 +2,8 @@ import { useCallback } from 'react';
 
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import {
+  archiveBook as archiveBookThunk,
   createBook as createBookThunk,
-  deleteBook as deleteBookThunk,
   fetchBooks as fetchBooksThunk,
   resetMutationStatus,
   selectBooks,
@@ -12,6 +12,7 @@ import {
   selectBooksMutationStatus,
   selectBooksStatus,
   selectBooksTotal,
+  unarchiveBook as unarchiveBookThunk,
   updateBook as updateBookThunk,
 } from '@/redux/slices/booksSlice';
 import { RequestStatus } from '@/types/common';
@@ -46,7 +47,15 @@ export function useBooks() {
     [dispatch],
   );
 
-  const deleteBook = useCallback((bookId: string) => dispatch(deleteBookThunk(bookId)), [dispatch]);
+  const archiveBook = useCallback(
+    (bookId: string) => dispatch(archiveBookThunk(bookId)),
+    [dispatch],
+  );
+
+  const unarchiveBook = useCallback(
+    (bookId: string) => dispatch(unarchiveBookThunk(bookId)),
+    [dispatch],
+  );
 
   const clearMutationError = useCallback(() => dispatch(resetMutationStatus()), [dispatch]);
 
@@ -60,7 +69,8 @@ export function useBooks() {
     fetchBooks,
     createBook,
     updateBook,
-    deleteBook,
+    archiveBook,
+    unarchiveBook,
     clearMutationError,
   };
 }

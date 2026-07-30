@@ -5,16 +5,23 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
+import FormControl from '@mui/material/FormControl';
 import Grid from '@mui/material/Grid';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select, { type SelectChangeEvent } from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import { type ChangeEvent, type FormEvent, useState } from 'react';
+
+import type { Category } from '@/features/categories/types/category.types';
 
 import type { Book, BookRequest } from '../types/book.types';
 
 interface BookFormDialogProps {
   open: boolean;
   book: Book | null;
+  categories: Category[];
   isSubmitting: boolean;
   error: string | null;
   onClose: () => void;
@@ -26,7 +33,7 @@ interface FormValues {
   author: string;
   publisher: string;
   isbn: string;
-  category: string;
+  categoryId: string;
   description: string;
   publishedYear: string;
 }
@@ -36,7 +43,7 @@ const emptyValues: FormValues = {
   author: '',
   publisher: '',
   isbn: '',
-  category: '',
+  categoryId: '',
   description: '',
   publishedYear: '',
 };
@@ -50,7 +57,7 @@ function valuesFromBook(book: Book | null): FormValues {
     author: book.author,
     publisher: book.publisher ?? '',
     isbn: book.isbn ?? '',
-    category: book.category ?? '',
+    categoryId: book.category_id ?? '',
     description: book.description ?? '',
     publishedYear: book.published_year != null ? String(book.published_year) : '',
   };
@@ -63,6 +70,7 @@ function valuesFromBook(book: Book | null): FormValues {
 export function BookFormDialog({
   open,
   book,
+  categories,
   isSubmitting,
   error,
   onClose,
@@ -75,10 +83,16 @@ export function BookFormDialog({
     setValues((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
+  const handleCategoryChange = (event: SelectChangeEvent<string>) => {
+    setValues((prev) => ({ ...prev, categoryId: event.target.value }));
+  };
+
+  const canSubmit = values.title.trim().length > 0 && values.author.trim().length > 0;
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!values.title.trim() || !values.author.trim()) {
+    if (!canSubmit) {
       setFieldError('Title and author are required.');
       return;
     }
@@ -99,7 +113,7 @@ export function BookFormDialog({
       author: values.author.trim(),
       publisher: values.publisher.trim() || null,
       isbn: values.isbn.trim() || null,
-      category: values.category.trim() || null,
+      category_id: values.categoryId || null,
       description: values.description.trim() || null,
       published_year: publishedYear ?? null,
     });
@@ -115,7 +129,7 @@ export function BookFormDialog({
           <Stack spacing={2}>
             {displayedError && <Alert severity="error">{displayedError}</Alert>}
             <Grid container spacing={2}>
-              <Grid size={6}>
+              <Grid size={12}>
                 <TextField
                   label="Title"
                   value={values.title}
@@ -151,12 +165,24 @@ export function BookFormDialog({
                 />
               </Grid>
               <Grid size={6}>
-                <TextField
-                  label="Category"
-                  value={values.category}
-                  onChange={handleChange('category')}
-                  fullWidth
-                />
+                <FormControl fullWidth>
+                  <InputLabel id="book-category-label">Category</InputLabel>
+                  <Select
+                    labelId="book-category-label"
+                    label="Category"
+                    value={values.categoryId}
+                    onChange={handleCategoryChange}
+                  >
+                    <MenuItem value="">
+                      <em>None</em>
+                    </MenuItem>
+                    {categories.map((category) => (
+                      <MenuItem key={category.category_id} value={category.category_id}>
+                        {category.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid size={6}>
                 <TextField
@@ -184,7 +210,7 @@ export function BookFormDialog({
           <Button onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !canSubmit}>
             {book ? 'Save changes' : 'Add book'}
           </Button>
         </DialogActions>

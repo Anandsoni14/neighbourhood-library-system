@@ -21,9 +21,11 @@ const book = {
   author: 'Robert C. Martin',
   publisher: 'Prentice Hall',
   isbn: '9780132350884',
-  category: 'Software',
+  category_id: 'cat-1',
+  category: { category_id: 'cat-1', name: 'Software' },
   description: null,
   published_year: 2008,
+  is_archived: false,
 };
 
 describe('bookService', () => {
@@ -47,8 +49,9 @@ describe('bookService', () => {
         limit: 25,
         title: 'clean',
         author: undefined,
-        category: undefined,
+        category_id: undefined,
         isbn: undefined,
+        archived: undefined,
         sort_by: 'title',
         sort_dir: 'asc',
       },
@@ -85,11 +88,21 @@ describe('bookService', () => {
     expect(result).toEqual(book);
   });
 
-  it('deletes a book', async () => {
-    vi.mocked(httpClient.delete).mockResolvedValue({ data: undefined });
+  it('archives a book', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({ data: { ...book, is_archived: true } });
 
-    await bookService.remove('1');
+    const result = await bookService.archive('1');
 
-    expect(httpClient.delete).toHaveBeenCalledWith('/books/1');
+    expect(httpClient.post).toHaveBeenCalledWith('/books/1/archive');
+    expect(result.is_archived).toBe(true);
+  });
+
+  it('unarchives a book', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({ data: book });
+
+    const result = await bookService.unarchive('1');
+
+    expect(httpClient.post).toHaveBeenCalledWith('/books/1/unarchive');
+    expect(result.is_archived).toBe(false);
   });
 });

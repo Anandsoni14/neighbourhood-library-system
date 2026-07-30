@@ -34,7 +34,7 @@ describe('AppRoutes', () => {
     render(<AppRoutes />, { initialEntries: ['/'], preloadedState: authenticatedState });
 
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Neighbour Library' })).toBeVisible();
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeVisible();
   });
 
@@ -42,7 +42,7 @@ describe('AppRoutes', () => {
     render(<AppRoutes />, { initialEntries: ['/books'], preloadedState: authenticatedState });
 
     expect(await screen.findByRole('heading', { name: 'Books' })).toBeVisible();
-    expect(screen.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Neighbour Library' })).toBeVisible();
   });
 
   it('renders the 404 page for an unknown path', async () => {

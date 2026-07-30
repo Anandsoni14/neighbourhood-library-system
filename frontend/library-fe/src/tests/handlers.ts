@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
+import type { Book } from '@/features/books/types/book.types';
+import type { Category } from '@/features/categories/types/category.types';
 import type { BookCopy } from '@/features/copies/types/copy.types';
 import type { Loan } from '@/features/loans/types/loan.types';
 import type { Member } from '@/features/members/types/member.types';
@@ -21,16 +23,27 @@ export const staffFixture = {
   status: 'ACTIVE' as const,
 };
 
-export const bookFixtures = [
+export const categoryFixtures: Category[] = [
+  {
+    category_id: '66666666-6666-6666-6666-666666666661',
+    name: 'Software',
+    description: null,
+    is_archived: false,
+  },
+];
+
+export const bookFixtures: Book[] = [
   {
     book_id: '22222222-2222-2222-2222-222222222221',
     title: 'Clean Code',
     author: 'Robert C. Martin',
     publisher: 'Prentice Hall',
     isbn: '9780132350884',
-    category: 'Software',
+    category_id: '66666666-6666-6666-6666-666666666661',
+    category: { category_id: '66666666-6666-6666-6666-666666666661', name: 'Software' },
     description: 'A handbook of agile software craftsmanship.',
     published_year: 2008,
+    is_archived: false,
   },
   {
     book_id: '22222222-2222-2222-2222-222222222222',
@@ -38,9 +51,11 @@ export const bookFixtures = [
     author: 'Andrew Hunt',
     publisher: 'Addison-Wesley',
     isbn: '9780135957059',
-    category: 'Software',
+    category_id: '66666666-6666-6666-6666-666666666661',
+    category: { category_id: '66666666-6666-6666-6666-666666666661', name: 'Software' },
     description: null,
     published_year: 2019,
+    is_archived: false,
   },
 ];
 
@@ -50,7 +65,7 @@ export const memberFixtures: Member[] = [
     first_name: 'Ada',
     last_name: 'Lovelace',
     email: 'ada@example.com',
-    phone_number: '555-1234',
+    phone_number: '5551234567',
     government_id_type: 'PASSPORT',
     government_id_number: 'X12345',
     street: '1 Analytical Engine Way',
@@ -139,6 +154,13 @@ export function resetBooks(): void {
   books = bookFixtures.map((book) => ({ ...book }));
 }
 
+/** Same rationale as `resetBooks`, for the category fixture store. */
+let categories = categoryFixtures.map((category) => ({ ...category }));
+
+export function resetCategories(): void {
+  categories = categoryFixtures.map((category) => ({ ...category }));
+}
+
 /** Same rationale as `resetBooks`, for the member fixture store. */
 let members = memberFixtures.map((member) => ({ ...member }));
 
@@ -181,14 +203,76 @@ export const handlers = [
   ),
   http.get(`${API_ORIGIN}/auth/me`, () => HttpResponse.json(staffFixture)),
 
+  http.get(`${API_ORIGIN}/categories`, ({ request }) => {
+    const url = new URL(request.url);
+    const skip = Number(url.searchParams.get('skip') ?? '0');
+    const limit = Number(url.searchParams.get('limit') ?? '100');
+    const name = url.searchParams.get('name');
+    const includeArchived = url.searchParams.get('include_archived') === 'true';
+
+    const filtered = categories.filter(
+      (category) => matches(category.name, name) && (includeArchived || !category.is_archived),
+    );
+    const page = filtered.slice(skip, skip + limit);
+
+    return HttpResponse.json({ items: page, total: filtered.length, skip, limit });
+  }),
+
+  http.post(`${API_ORIGIN}/categories`, async ({ request }) => {
+    const body = (await request.json()) as { name: string; description?: string | null };
+    const created = {
+      category_id: `generated-category-${String(categories.length + 1)}`,
+      name: body.name,
+      description: body.description ?? null,
+      is_archived: false,
+    };
+    categories = [...categories, created];
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.put(`${API_ORIGIN}/categories/:categoryId`, async ({ request, params }) => {
+    const body = (await request.json()) as { name?: string; description?: string | null };
+    const index = categories.findIndex((category) => category.category_id === params.categoryId);
+    const existing = categories[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Category not found' }, { status: 404 });
+    }
+    const updated = { ...existing, ...body };
+    categories = [...categories.slice(0, index), updated, ...categories.slice(index + 1)];
+    return HttpResponse.json(updated);
+  }),
+
+  http.post(`${API_ORIGIN}/categories/:categoryId/archive`, ({ params }) => {
+    const index = categories.findIndex((category) => category.category_id === params.categoryId);
+    const existing = categories[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Category not found' }, { status: 404 });
+    }
+    const updated = { ...existing, is_archived: true };
+    categories = [...categories.slice(0, index), updated, ...categories.slice(index + 1)];
+    return HttpResponse.json(updated);
+  }),
+
+  http.post(`${API_ORIGIN}/categories/:categoryId/unarchive`, ({ params }) => {
+    const index = categories.findIndex((category) => category.category_id === params.categoryId);
+    const existing = categories[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Category not found' }, { status: 404 });
+    }
+    const updated = { ...existing, is_archived: false };
+    categories = [...categories.slice(0, index), updated, ...categories.slice(index + 1)];
+    return HttpResponse.json(updated);
+  }),
+
   http.get(`${API_ORIGIN}/books`, ({ request }) => {
     const url = new URL(request.url);
     const skip = Number(url.searchParams.get('skip') ?? '0');
     const limit = Number(url.searchParams.get('limit') ?? '100');
     const title = url.searchParams.get('title');
     const author = url.searchParams.get('author');
-    const category = url.searchParams.get('category');
+    const categoryId = url.searchParams.get('category_id');
     const isbn = url.searchParams.get('isbn');
+    const archived = url.searchParams.get('archived') ?? 'active';
     const sortBy = (url.searchParams.get('sort_by') ?? 'title') as keyof (typeof books)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
 
@@ -196,13 +280,14 @@ export const handlers = [
       (book) =>
         matches(book.title, title) &&
         matches(book.author, author) &&
-        matches(book.category, category) &&
-        matches(book.isbn, isbn, true),
+        (categoryId ? book.category_id === categoryId : true) &&
+        matches(book.isbn, isbn, true) &&
+        (archived === 'all' ? true : archived === 'archived' ? book.is_archived : !book.is_archived),
     );
 
     const sorted = [...filtered].sort((a, b) => {
-      const left = a[sortBy];
-      const right = b[sortBy];
+      const left = sortBy === 'category' ? a.category?.name : a[sortBy];
+      const right = sortBy === 'category' ? b.category?.name : b[sortBy];
       if (left === right) {
         return 0;
       }
@@ -216,8 +301,28 @@ export const handlers = [
   }),
 
   http.post(`${API_ORIGIN}/books`, async ({ request }) => {
-    const body = (await request.json()) as Omit<(typeof books)[number], 'book_id'>;
-    const created = { ...body, book_id: `generated-${String(books.length + 1)}` };
+    const body = (await request.json()) as {
+      title: string;
+      author: string;
+      publisher?: string | null;
+      isbn?: string | null;
+      category_id?: string | null;
+      description?: string | null;
+      published_year?: number | null;
+    };
+    const category = categories.find((candidate) => candidate.category_id === body.category_id);
+    const created = {
+      book_id: `generated-${String(books.length + 1)}`,
+      title: body.title,
+      author: body.author,
+      publisher: body.publisher ?? null,
+      isbn: body.isbn ?? null,
+      category_id: body.category_id ?? null,
+      category: category ? { category_id: category.category_id, name: category.name } : null,
+      description: body.description ?? null,
+      published_year: body.published_year ?? null,
+      is_archived: false,
+    };
     books = [...books, created];
     return HttpResponse.json(created, { status: 201 });
   }),
@@ -231,23 +336,56 @@ export const handlers = [
   }),
 
   http.put(`${API_ORIGIN}/books/:bookId`, async ({ request, params }) => {
-    const body = (await request.json()) as Omit<(typeof books)[number], 'book_id'>;
+    const body = (await request.json()) as {
+      title: string;
+      author: string;
+      publisher?: string | null;
+      isbn?: string | null;
+      category_id?: string | null;
+      description?: string | null;
+      published_year?: number | null;
+    };
     const index = books.findIndex((book) => book.book_id === params.bookId);
-    if (index === -1) {
+    const existing = books[index];
+    if (index === -1 || !existing) {
       return HttpResponse.json({ detail: 'Book not found' }, { status: 404 });
     }
-    const updated = { ...body, book_id: params.bookId as string };
+    const category = categories.find((candidate) => candidate.category_id === body.category_id);
+    const updated = {
+      ...existing,
+      title: body.title,
+      author: body.author,
+      publisher: body.publisher ?? null,
+      isbn: body.isbn ?? null,
+      category_id: body.category_id ?? null,
+      category: category ? { category_id: category.category_id, name: category.name } : null,
+      description: body.description ?? null,
+      published_year: body.published_year ?? null,
+    };
     books = [...books.slice(0, index), updated, ...books.slice(index + 1)];
     return HttpResponse.json(updated);
   }),
 
-  http.delete(`${API_ORIGIN}/books/:bookId`, ({ params }) => {
+  http.post(`${API_ORIGIN}/books/:bookId/archive`, ({ params }) => {
     const index = books.findIndex((book) => book.book_id === params.bookId);
-    if (index === -1) {
+    const existing = books[index];
+    if (index === -1 || !existing) {
       return HttpResponse.json({ detail: 'Book not found' }, { status: 404 });
     }
-    books = [...books.slice(0, index), ...books.slice(index + 1)];
-    return new HttpResponse(null, { status: 204 });
+    const updated = { ...existing, is_archived: true };
+    books = [...books.slice(0, index), updated, ...books.slice(index + 1)];
+    return HttpResponse.json(updated);
+  }),
+
+  http.post(`${API_ORIGIN}/books/:bookId/unarchive`, ({ params }) => {
+    const index = books.findIndex((book) => book.book_id === params.bookId);
+    const existing = books[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Book not found' }, { status: 404 });
+    }
+    const updated = { ...existing, is_archived: false };
+    books = [...books.slice(0, index), updated, ...books.slice(index + 1)];
+    return HttpResponse.json(updated);
   }),
 
   http.get(`${API_ORIGIN}/members`, ({ request }) => {

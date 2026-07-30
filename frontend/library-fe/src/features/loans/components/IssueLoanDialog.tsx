@@ -106,6 +106,8 @@ export function IssueLoanDialog({
     };
   }, [selectedBook]);
 
+  const canSubmit = selectedCopy !== null && selectedMember !== null;
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -175,7 +177,7 @@ export function IssueLoanDialog({
           <Button onClick={onClose} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting}>
+          <Button type="submit" variant="contained" disabled={isSubmitting || !canSubmit}>
             Issue loan
           </Button>
         </DialogActions>

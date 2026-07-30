@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     app_name: str = "Library Management System"
     environment: str = "local"
     database_url: str = "postgresql+psycopg://user:password@localhost:5432/library_db"
+    # A separate database for pytest, never seeded, so exact-count assertions in
+    # the test suite stay meaningful once sample data lands in `database_url`'s
+    # database via the Docker entrypoint. Never read by application runtime code
+    # (only tests/conftest.py uses it) — kept in Settings anyway for the same
+    # env/.env sourcing every other connection string gets.
+    test_database_url: str = "postgresql+psycopg://user:password@localhost:5432/library_test_db"
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"
     jwt_secret_key: str = "change-me-in-production-min-32-bytes-long"

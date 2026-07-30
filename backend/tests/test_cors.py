@@ -25,16 +25,22 @@ async def test_preflight_from_allowed_origin_is_accepted(client: AsyncClient) ->
     assert response.headers["access-control-allow-origin"] == ALLOWED_ORIGIN
 
 
-async def test_simple_request_from_allowed_origin_gets_cors_header(client: AsyncClient) -> None:
+async def test_simple_request_from_allowed_origin_gets_cors_header(
+    client: AsyncClient, librarian_headers: dict[str, str]
+) -> None:
     """The actual response — not just the preflight — must carry the header."""
-    response = await client.get("/api/v1/books", headers={"Origin": ALLOWED_ORIGIN})
+    headers = {**librarian_headers, "Origin": ALLOWED_ORIGIN}
+    response = await client.get("/api/v1/books", headers=headers)
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == ALLOWED_ORIGIN
 
 
-async def test_request_from_disallowed_origin_gets_no_cors_header(client: AsyncClient) -> None:
+async def test_request_from_disallowed_origin_gets_no_cors_header(
+    client: AsyncClient, librarian_headers: dict[str, str]
+) -> None:
     """An unlisted origin is not granted access."""
-    response = await client.get("/api/v1/books", headers={"Origin": DISALLOWED_ORIGIN})
+    headers = {**librarian_headers, "Origin": DISALLOWED_ORIGIN}
+    response = await client.get("/api/v1/books", headers=headers)
 
     assert "access-control-allow-origin" not in response.headers

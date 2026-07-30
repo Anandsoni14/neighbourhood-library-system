@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
 from core.pagination import SortDir
 from db.session import get_db
@@ -14,7 +15,11 @@ from models import Transaction
 from models.enums import PaymentMode, TransactionStatus, TransactionType
 from services.transaction import TransactionService
 
-router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
+router = APIRouter(
+    prefix="/api/v1/transactions",
+    tags=["transactions"],
+    dependencies=[Depends(get_current_staff)],
+)
 
 
 class TransactionSortField(StrEnum):

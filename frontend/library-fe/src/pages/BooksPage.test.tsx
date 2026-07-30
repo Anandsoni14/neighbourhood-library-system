@@ -73,7 +73,7 @@ describe('BooksPage', () => {
     expect(await screen.findByText('Clean Code (2nd Edition)')).toBeVisible();
   });
 
-  it('deletes a book after confirmation', async () => {
+  it('archives a book, hiding it from the default active list', async () => {
     const user = userEvent.setup();
     render(<BooksPage />);
     const row = (await screen.findByText('Clean Code')).closest('tr');
@@ -81,8 +81,7 @@ describe('BooksPage', () => {
       throw new Error('Expected a table row');
     }
 
-    await user.click(within(row).getByRole('button', { name: /delete clean code/i }));
-    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(within(row).getByRole('button', { name: /archive clean code/i }));
 
     await waitFor(() => {
       expect(screen.queryByText('Clean Code')).not.toBeInTheDocument();

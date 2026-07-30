@@ -10,7 +10,19 @@ A comprehensive library management application built with Python (FastAPI) backe
 
 ## Getting Started
 
-See README files in respective directories for setup instructions.
+```bash
+docker compose up --build
+```
+
+Brings up Postgres, migrates and seeds the backend with sample data, and serves the frontend on
+`http://localhost`. Sign in with the seeded admin account:
+
+| Field | Value |
+|---|---|
+| Email | `admin@locallibrary.com` |
+| Password | `admin$12345` |
+
+See README files in respective directories for further setup instructions.
 
 ## Architecture
 

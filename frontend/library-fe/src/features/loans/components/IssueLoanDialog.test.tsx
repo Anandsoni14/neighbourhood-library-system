@@ -117,8 +117,7 @@ describe('IssueLoanDialog', () => {
     });
   });
 
-  it('blocks submission until a copy and member are selected', async () => {
-    const user = userEvent.setup();
+  it('blocks submission until a copy and member are selected', () => {
     vi.mocked(httpClient.get).mockResolvedValue({
       data: { items: [], total: 0, skip: 0, limit: 25 },
     });
@@ -134,9 +133,9 @@ describe('IssueLoanDialog', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Issue loan' }));
-
-    expect(await screen.findByText(/a copy and a member are required/i)).toBeVisible();
+    // The submit button stays disabled until both a copy and a member are
+    // selected, rather than allowing a click that then surfaces an error.
+    expect(screen.getByRole('button', { name: 'Issue loan' })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

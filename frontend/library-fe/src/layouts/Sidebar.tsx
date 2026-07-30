@@ -1,5 +1,6 @@
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
 import SwapHorizOutlinedIcon from '@mui/icons-material/SwapHorizOutlined';
@@ -12,6 +13,9 @@ import ListItemText from '@mui/material/ListItemText';
 import Toolbar from '@mui/material/Toolbar';
 import type { ReactElement } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
+
+import { useAuth } from '@/features/auth/hooks/useAuth';
+import { StaffRole } from '@/types/api';
 
 import { APP_BAR_HEIGHT, DRAWER_WIDTH } from './constants';
 
@@ -26,13 +30,23 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: <DashboardOutlinedIcon fontSize="small" /> },
   { label: 'Books', path: '/books', icon: <MenuBookOutlinedIcon fontSize="small" /> },
+  { label: 'Categories', path: '/categories', icon: <CategoryOutlinedIcon fontSize="small" /> },
   { label: 'Members', path: '/members', icon: <PeopleOutlinedIcon fontSize="small" /> },
-  { label: 'Copies', path: '/copies', icon: <Inventory2OutlinedIcon fontSize="small" /> },
   { label: 'Loans', path: '/loans', icon: <SwapHorizOutlinedIcon fontSize="small" /> },
+];
+
+// Only visible to ADMIN staff — the backend enforces this regardless, but
+// hiding the link avoids sending non-admins into a page that just tells them
+// they can't use it.
+const adminOnlyNavItems: NavItem[] = [
+  { label: 'Staff', path: '/staff', icon: <BadgeOutlinedIcon fontSize="small" /> },
 ];
 
 export function Sidebar() {
   const location = useLocation();
+  const { staff } = useAuth();
+  const items =
+    staff?.role === StaffRole.ADMIN ? [...navItems, ...adminOnlyNavItems] : navItems;
 
   return (
     <Drawer
@@ -45,7 +59,7 @@ export function Sidebar() {
     >
       <Toolbar variant="dense" sx={{ minHeight: APP_BAR_HEIGHT }} />
       <List component="nav" aria-label="Main navigation">
-        {navItems.map((item) => (
+        {items.map((item) => (
           <ListItem key={item.path} disablePadding>
             <ListItemButton
               component={RouterLink}

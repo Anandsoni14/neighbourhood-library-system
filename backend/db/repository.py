@@ -43,6 +43,7 @@ class BaseRepository[ModelT: Base]:
         limit: int = 100,
         offset: int = 0,
         options: Sequence[ExecutableOption] = (),
+        joins: Sequence[InstrumentedAttribute[Any]] = (),
     ) -> tuple[Sequence[ModelT], int]:
         """Return one page of rows plus the total row count matching `filters`.
 
@@ -54,6 +55,14 @@ class BaseRepository[ModelT: Base]:
         exactly one. The count query reuses the same predicates, so `total`
         always describes the filtered set.
 
+        `joins` is a sequence of relationship attributes LEFT OUTER JOINed onto
+        both statements, so `filters`/`sort_by` may reference a related table's
+        columns (e.g. sorting books by category name). OUTER rather than INNER so
+        rows whose relationship is NULL are not silently dropped. The count query
+        gets the same joins, otherwise a filter on a joined column would raise;
+        joining many-to-one against a unique key cannot duplicate rows, so `total`
+        stays correct.
+
         A primary-key tiebreaker is always appended to ORDER BY: without it, rows
         with equal sort values have no guaranteed relative order between queries,
         and a client paging through the result could see a row twice or miss one.
@@ -61,6 +70,8 @@ class BaseRepository[ModelT: Base]:
         where = list(filters)
 
         stmt = select(self._model)
+        for relationship in joins:
+            stmt = stmt.outerjoin(relationship)
         if where:
             stmt = stmt.where(*where)
         if options:
@@ -75,6 +86,8 @@ class BaseRepository[ModelT: Base]:
         rows = (await self._session.execute(stmt)).scalars().all()
 
         count_stmt = select(func.count()).select_from(self._model)
+        for relationship in joins:
+            count_stmt = count_stmt.outerjoin(relationship)
         if where:
             count_stmt = count_stmt.where(*where)
         total = (await self._session.execute(count_stmt)).scalar_one()

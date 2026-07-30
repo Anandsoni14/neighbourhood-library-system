@@ -19,8 +19,9 @@ export const bookService = {
         limit: params.limit,
         title: nonEmpty(params.title),
         author: nonEmpty(params.author),
-        category: nonEmpty(params.category),
+        category_id: nonEmpty(params.categoryId),
         isbn: nonEmpty(params.isbn),
+        archived: params.archived,
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },
@@ -43,7 +44,13 @@ export const bookService = {
     return data;
   },
 
-  async remove(bookId: string): Promise<void> {
-    await httpClient.delete(`/books/${bookId}`);
+  async archive(bookId: string): Promise<Book> {
+    const { data } = await httpClient.post<Book>(`/books/${bookId}/archive`);
+    return data;
+  },
+
+  async unarchive(bookId: string): Promise<Book> {
+    const { data } = await httpClient.post<Book>(`/books/${bookId}/unarchive`);
+    return data;
   },
 };

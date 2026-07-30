@@ -18,14 +18,17 @@ const DashboardPage = lazy(() =>
 const BooksPage = lazy(() =>
   import('@/pages/BooksPage').then((module) => ({ default: module.BooksPage })),
 );
+const CategoriesPage = lazy(() =>
+  import('@/pages/CategoriesPage').then((module) => ({ default: module.CategoriesPage })),
+);
 const MembersPage = lazy(() =>
   import('@/pages/MembersPage').then((module) => ({ default: module.MembersPage })),
 );
-const CopiesPage = lazy(() =>
-  import('@/pages/CopiesPage').then((module) => ({ default: module.CopiesPage })),
-);
 const LoansPage = lazy(() =>
   import('@/pages/LoansPage').then((module) => ({ default: module.LoansPage })),
+);
+const StaffPage = lazy(() =>
+  import('@/pages/StaffPage').then((module) => ({ default: module.StaffPage })),
 );
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })),
@@ -44,9 +47,10 @@ export function AppRoutes() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
             <Route path="books" element={<BooksPage />} />
+            <Route path="categories" element={<CategoriesPage />} />
             <Route path="members" element={<MembersPage />} />
-            <Route path="copies" element={<CopiesPage />} />
             <Route path="loans" element={<LoansPage />} />
+            <Route path="staff" element={<StaffPage />} />
           </Route>
         </Route>
 

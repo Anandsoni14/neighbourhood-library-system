@@ -5,14 +5,20 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
+from api.validators import PhoneNumber, PostalCode
 from core.pagination import SortDir
 from db.session import get_db
 from models import Member
 from models.enums import MembershipStatus
 from services.member import MemberService
 
-router = APIRouter(prefix="/api/v1/members", tags=["members"])
+router = APIRouter(
+    prefix="/api/v1/members",
+    tags=["members"],
+    dependencies=[Depends(get_current_staff)],
+)
 
 
 class MemberSortField(StrEnum):
@@ -40,13 +46,13 @@ class MemberCreateRequest(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
-    phone_number: str | None = None
+    phone_number: PhoneNumber | None = None
     government_id_type: str | None = None
     government_id_number: str | None = None
     street: str | None = None
     city: str | None = None
     state: str | None = None
-    postal_code: str | None = None
+    postal_code: PostalCode | None = None
     country: str | None = None
     remarks: str | None = None
 
@@ -57,13 +63,13 @@ class MemberUpdateRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     email: EmailStr | None = None
-    phone_number: str | None = None
+    phone_number: PhoneNumber | None = None
     government_id_type: str | None = None
     government_id_number: str | None = None
     street: str | None = None
     city: str | None = None
     state: str | None = None
-    postal_code: str | None = None
+    postal_code: PostalCode | None = None
     country: str | None = None
     membership_status: MembershipStatus | None = None
     remarks: str | None = None
@@ -165,6 +171,22 @@ async def update_member(
     """Update a member."""
     service = MemberService(db)
     member = await service.update_member(member_id, **req.model_dump(exclude_unset=True))
+    return MemberResponse.model_validate(member)
+
+
+@router.post("/{member_id}/suspend", response_model=MemberResponse)
+async def suspend_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> MemberResponse:
+    """Suspend a member, blocking them from borrowing until reactivated."""
+    service = MemberService(db)
+    member = await service.suspend_member(member_id)
+    return MemberResponse.model_validate(member)
+
+
+@router.post("/{member_id}/reactivate", response_model=MemberResponse)
+async def reactivate_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> MemberResponse:
+    """Reactivate a suspended or inactive member."""
+    service = MemberService(db)
+    member = await service.reactivate_member(member_id)
     return MemberResponse.model_validate(member)
 
 

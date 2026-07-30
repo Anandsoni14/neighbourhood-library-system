@@ -21,9 +21,11 @@ const book = {
   author: 'Robert C. Martin',
   publisher: null,
   isbn: null,
+  category_id: null,
   category: null,
   description: null,
   published_year: 2008,
+  is_archived: false,
 };
 
 function wrapperFor(store: ReturnType<typeof setupStore>) {
@@ -77,17 +79,17 @@ describe('useBooks', () => {
       statusText: 'Conflict',
       headers: {},
       config: { headers: new AxiosHeaders() },
-      data: { detail: 'Cannot delete: book has active loans' },
+      data: { detail: 'Cannot archive: book has active loans' },
     };
-    vi.mocked(httpClient.delete).mockRejectedValue(error);
+    vi.mocked(httpClient.post).mockRejectedValue(error);
 
     const store = setupStore();
     const { result } = renderHook(() => useBooks(), { wrapper: wrapperFor(store) });
 
-    await result.current.deleteBook('1');
+    await result.current.archiveBook('1');
 
     await waitFor(() => {
-      expect(result.current.mutationError).toBe('Cannot delete: book has active loans');
+      expect(result.current.mutationError).toBe('Cannot archive: book has active loans');
     });
 
     result.current.clearMutationError();

@@ -20,6 +20,7 @@ from core.exceptions import (
 from core.pagination import SortDir
 from models import Loan
 from models.enums import CopyCondition, CopyStatus, LoanStatus, MembershipStatus
+from repositories.book import BookRepository
 from repositories.book_copy import BookCopyRepository
 from repositories.loan import LoanRepository
 from repositories.member import MemberRepository
@@ -42,6 +43,7 @@ class LoanService:
     def __init__(self, session: AsyncSession) -> None:
         self.repository = LoanRepository(session)
         self._copy_repository = BookCopyRepository(session)
+        self._book_repository = BookRepository(session)
         self._member_repository = MemberRepository(session)
         self._staff_repository = StaffRepository(session)
         self._session = session
@@ -72,6 +74,15 @@ class LoanService:
         if copy.status != CopyStatus.AVAILABLE:
             raise BookUnavailableException(
                 f"Book copy {copy_id} is not available (status: {copy.status})"
+            )
+
+        # Archiving a book leaves its copies untouched (see BookService.archive_book),
+        # so this is the single enforcement point that stops a new loan on one.
+        # Returns are unaffected — return_loan never calls this check.
+        book = await self._book_repository.get_by_id(copy.book_id)
+        if book and book.is_archived:
+            raise BookUnavailableException(
+                f"Book {copy.book_id} is archived and cannot be borrowed"
             )
 
         staff = await self._staff_repository.get_by_id(issued_by_staff_id)

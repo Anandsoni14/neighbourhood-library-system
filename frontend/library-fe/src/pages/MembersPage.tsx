@@ -27,6 +27,7 @@ import { type ChangeEvent, useEffect, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
+import { MemberLoanHistoryDialog } from '@/features/loans/components/MemberLoanHistoryDialog';
 import { MemberFormDialog } from '@/features/members/components/MemberFormDialog';
 import { useMembers } from '@/features/members/hooks/useMembers';
 import { MemberSortField } from '@/features/members/types/member.types';
@@ -95,6 +96,7 @@ export function MembersPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [deletingMember, setDeletingMember] = useState<Member | null>(null);
+  const [historyMember, setHistoryMember] = useState<Member | null>(null);
   // Bumped on every open so MemberFormDialog remounts (and re-seeds its fields
   // from `editingMember`) instead of needing an effect to reset its state.
   const [formKey, setFormKey] = useState(0);
@@ -263,7 +265,12 @@ export function MembersPage() {
                 </TableRow>
               )}
               {members.map((member) => (
-                <TableRow key={member.member_id} hover>
+                <TableRow
+                  key={member.member_id}
+                  hover
+                  onClick={() => setHistoryMember(member)}
+                  sx={{ cursor: 'pointer' }}
+                >
                   <TableCell>{member.first_name}</TableCell>
                   <TableCell>{member.last_name}</TableCell>
                   <TableCell>{member.email}</TableCell>
@@ -280,14 +287,20 @@ export function MembersPage() {
                     <IconButton
                       size="small"
                       aria-label={`Edit ${member.first_name} ${member.last_name}`}
-                      onClick={() => openEditDialog(member)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEditDialog(member);
+                      }}
                     >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                     <IconButton
                       size="small"
                       aria-label={`Delete ${member.first_name} ${member.last_name}`}
-                      onClick={() => setDeletingMember(member)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDeletingMember(member);
+                      }}
                     >
                       <DeleteOutlineIcon fontSize="small" />
                     </IconButton>
@@ -328,6 +341,12 @@ export function MembersPage() {
         isConfirming={isMutating}
         onCancel={() => setDeletingMember(null)}
         onConfirm={() => void handleConfirmDelete()}
+      />
+
+      <MemberLoanHistoryDialog
+        open={historyMember !== null}
+        member={historyMember}
+        onClose={() => setHistoryMember(null)}
       />
 
       <FeedbackSnackbar

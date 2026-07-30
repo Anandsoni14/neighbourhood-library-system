@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { RequestStatus } from '@/types/common';
 
 import booksReducer, {
+  archiveBook,
   createBook,
-  deleteBook,
   fetchBooks,
   resetMutationStatus,
   updateBook,
@@ -16,9 +16,11 @@ const book = {
   author: 'Robert C. Martin',
   publisher: null,
   isbn: null,
+  category_id: null,
   category: null,
   description: null,
   published_year: 2008,
+  is_archived: false,
 };
 
 const initialState = {
@@ -120,10 +122,10 @@ describe('booksSlice', () => {
     expect(state.mutationError).toBe('Unable to update the book.');
   });
 
-  it('deleteBook.fulfilled marks the mutation as succeeded', () => {
+  it('archiveBook.fulfilled marks the mutation as succeeded', () => {
     const state = booksReducer(
       { ...initialState, mutationStatus: RequestStatus.LOADING },
-      deleteBook.fulfilled('1', 'requestId', '1'),
+      archiveBook.fulfilled(book, 'requestId', '1'),
     );
 
     expect(state.mutationStatus).toBe(RequestStatus.SUCCEEDED);

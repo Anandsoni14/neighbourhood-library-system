@@ -80,8 +80,7 @@ describe('MemberFormDialog', () => {
     expect(screen.getByLabelText(/membership status/i)).toBeVisible();
   });
 
-  it('blocks submission when required fields are missing', async () => {
-    const user = userEvent.setup();
+  it('blocks submission when required fields are missing', () => {
     const onSubmit = vi.fn();
     render(
       <MemberFormDialog
@@ -94,9 +93,10 @@ describe('MemberFormDialog', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: 'Add member' }));
-
-    expect(await screen.findByText(/first name, last name, and email are required/i)).toBeVisible();
+    // The submit button stays disabled until first name, last name, and a
+    // valid email are all filled in, rather than allowing a click that then
+    // surfaces an error.
+    expect(screen.getByRole('button', { name: 'Add member' })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

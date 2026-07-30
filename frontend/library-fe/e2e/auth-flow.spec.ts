@@ -37,7 +37,7 @@ test.describe('app boot', () => {
   test('renders the title', async ({ page }) => {
     await page.goto('/login');
 
-    await expect(page).toHaveTitle('Sign in · Library Management System');
+    await expect(page).toHaveTitle('Sign in · Neighbour Library');
   });
 });
 
@@ -74,7 +74,7 @@ test.describe('login', () => {
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.getByText(`Welcome back, ${STAFF_FIXTURE.first_name}.`)).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Neighbour Library' })).toBeVisible();
     await expect(page.getByRole('link', { name: /dashboard/i })).toBeVisible();
   });
 

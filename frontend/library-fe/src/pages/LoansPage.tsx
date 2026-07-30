@@ -289,7 +289,7 @@ export function LoansPage() {
                       />
                     </TableCell>
                     <TableCell>
-                      {loan.status === LoanStatus.RETURNED ? loan.calculated_fine.toFixed(2) : '—'}
+                      {loan.status === LoanStatus.RETURNED ? Number(loan.calculated_fine).toFixed(2) : '—'}
                     </TableCell>
                     <TableCell align="right">
                       {loan.status === LoanStatus.ACTIVE && (

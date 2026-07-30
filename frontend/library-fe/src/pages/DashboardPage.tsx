@@ -225,7 +225,7 @@ export function DashboardPage() {
                     <TableCell>{formatDate(loan.due_at)}</TableCell>
                     <TableCell>{formatDate(loan.borrowed_at)}</TableCell>
                     <TableCell>{loan.days_overdue}</TableCell>
-                    <TableCell>{loan.estimated_fine.toFixed(2)}</TableCell>
+                    <TableCell>{Number(loan.estimated_fine).toFixed(2)}</TableCell>
                     <TableCell align="right">
                       <IconButton
                         size="small"

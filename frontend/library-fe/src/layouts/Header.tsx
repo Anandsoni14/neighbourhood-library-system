@@ -25,8 +25,8 @@ export function Header() {
       sx={{ zIndex: (theme) => theme.zIndex.drawer + 1, backgroundColor: 'background.paper' }}
     >
       <Toolbar variant="dense" sx={{ gap: 2 }}>
-        <Typography variant="h6" component="h1" color="text.primary" sx={{ flexGrow: 1 }}>
-          Library Management System
+        <Typography variant="h6" component="h1" sx={{ flexGrow: 1, color: '#000000' }}>
+          Neighbour Library
         </Typography>
         {staff && (
           <>

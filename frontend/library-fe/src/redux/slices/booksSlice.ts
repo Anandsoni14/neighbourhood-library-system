@@ -68,14 +68,24 @@ export const updateBook = createAsyncThunk<
   }
 });
 
-export const deleteBook = createAsyncThunk<string, string, { rejectValue: string }>(
-  'books/deleteBook',
+export const archiveBook = createAsyncThunk<Book, string, { rejectValue: string }>(
+  'books/archiveBook',
   async (bookId, { rejectWithValue }) => {
     try {
-      await bookService.remove(bookId);
-      return bookId;
+      return await bookService.archive(bookId);
     } catch (error) {
-      return rejectWithValue(getApiErrorMessage(error, 'Unable to delete the book.'));
+      return rejectWithValue(getApiErrorMessage(error, 'Unable to archive the book.'));
+    }
+  },
+);
+
+export const unarchiveBook = createAsyncThunk<Book, string, { rejectValue: string }>(
+  'books/unarchiveBook',
+  async (bookId, { rejectWithValue }) => {
+    try {
+      return await bookService.unarchive(bookId);
+    } catch (error) {
+      return rejectWithValue(getApiErrorMessage(error, 'Unable to unarchive the book.'));
     }
   },
 );
@@ -133,16 +143,27 @@ const booksSlice = createSlice({
         state.mutationStatus = RequestStatus.FAILED;
         state.mutationError = action.payload ?? 'Unable to update the book.';
       })
-      .addCase(deleteBook.pending, (state) => {
+      .addCase(archiveBook.pending, (state) => {
         state.mutationStatus = RequestStatus.LOADING;
         state.mutationError = null;
       })
-      .addCase(deleteBook.fulfilled, (state) => {
+      .addCase(archiveBook.fulfilled, (state) => {
         state.mutationStatus = RequestStatus.SUCCEEDED;
       })
-      .addCase(deleteBook.rejected, (state, action) => {
+      .addCase(archiveBook.rejected, (state, action) => {
         state.mutationStatus = RequestStatus.FAILED;
-        state.mutationError = action.payload ?? 'Unable to delete the book.';
+        state.mutationError = action.payload ?? 'Unable to archive the book.';
+      })
+      .addCase(unarchiveBook.pending, (state) => {
+        state.mutationStatus = RequestStatus.LOADING;
+        state.mutationError = null;
+      })
+      .addCase(unarchiveBook.fulfilled, (state) => {
+        state.mutationStatus = RequestStatus.SUCCEEDED;
+      })
+      .addCase(unarchiveBook.rejected, (state, action) => {
+        state.mutationStatus = RequestStatus.FAILED;
+        state.mutationError = action.payload ?? 'Unable to unarchive the book.';
       });
   },
 });
