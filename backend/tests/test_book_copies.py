@@ -57,7 +57,8 @@ class TestBookCopyService:
         await copy_service.create_copy(book_id=book_a.book_id, barcode="A-2")
         await copy_service.create_copy(book_id=book_b.book_id, barcode="B-1")
 
-        results = await copy_service.list_copies_by_book(book_a.book_id)
+        results, total = await copy_service.list_copies(book_id=book_a.book_id)
+        assert total == 2
         assert len(results) == 2
 
     async def test_list_copies_by_status(
@@ -65,8 +66,28 @@ class TestBookCopyService:
     ) -> None:
         book = await book_service.create_book(title="Book", author="Author")
         await copy_service.create_copy(book_id=book.book_id, barcode="S-1")
-        results = await copy_service.list_copies_by_status(CopyStatus.AVAILABLE)
+        results, total = await copy_service.list_copies(status=CopyStatus.AVAILABLE)
+        assert total == 1
         assert len(results) == 1
+
+    async def test_list_copies_combines_book_and_status(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        """Regression: book_id and status used to be mutually exclusive, so the
+        second filter was silently ignored and callers got the wrong rows."""
+        book_a = await book_service.create_book(title="Filtered A", author="Author")
+        book_b = await book_service.create_book(title="Filtered B", author="Author")
+        available = await copy_service.create_copy(book_id=book_a.book_id, barcode="F-A1")
+        borrowed = await copy_service.create_copy(book_id=book_a.book_id, barcode="F-A2")
+        await copy_service.update_copy(borrowed.copy_id, status=CopyStatus.BORROWED)
+        await copy_service.create_copy(book_id=book_b.book_id, barcode="F-B1")
+
+        results, total = await copy_service.list_copies(
+            book_id=book_a.book_id, status=CopyStatus.AVAILABLE
+        )
+
+        assert total == 1
+        assert results[0].copy_id == available.copy_id
 
     async def test_update_copy(
         self, book_service: BookService, copy_service: BookCopyService
@@ -118,7 +139,29 @@ class TestBookCopiesAPI:
 
         response = await client.get(f"/api/v1/book-copies?book_id={book_id}")
         assert response.status_code == 200
-        assert len(response.json()) == 1
+        assert response.json()["total"] == 1
+
+    async def test_list_book_copies_combines_filters_endpoint(self, client: AsyncClient) -> None:
+        """Regression: ?book_id=X&status=Y used to ignore status entirely."""
+        book_resp = await client.post(
+            "/api/v1/books", json={"title": "Combined Copies", "author": "Author"}
+        )
+        book_id = book_resp.json()["book_id"]
+        await client.post("/api/v1/book-copies", json={"book_id": book_id, "barcode": "CMB-1"})
+        borrowed = await client.post(
+            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "CMB-2"}
+        )
+        await client.put(
+            f"/api/v1/book-copies/{borrowed.json()['copy_id']}", json={"status": "BORROWED"}
+        )
+
+        response = await client.get(
+            "/api/v1/book-copies", params={"book_id": book_id, "status": "AVAILABLE"}
+        )
+
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["barcode"] == "CMB-1"
 
     async def test_get_book_copy_endpoint(self, client: AsyncClient) -> None:
         book_resp = await client.post("/api/v1/books", json={"title": "Book", "author": "Author"})

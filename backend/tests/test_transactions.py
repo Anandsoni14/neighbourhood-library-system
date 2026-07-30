@@ -286,7 +286,8 @@ class TestTransactionService:
             amount=Decimal("3.00"),
         )
 
-        results = await transaction_service.list_transactions_by_member(member.member_id)
+        results, total = await transaction_service.list_transactions(member_id=member.member_id)
+        assert total == 1
         assert len(results) == 1
 
     async def test_list_transactions_by_status(
@@ -299,8 +300,42 @@ class TestTransactionService:
             amount=Decimal("3.00"),
         )
 
-        results = await transaction_service.list_transactions_by_status(TransactionStatus.PENDING)
+        results, total = await transaction_service.list_transactions(
+            status=TransactionStatus.PENDING
+        )
+        assert total >= 1
         assert len(results) >= 1
+
+    async def test_list_transactions_combines_member_and_status(
+        self, member_service: MemberService, transaction_service: TransactionService
+    ) -> None:
+        """Regression: member_id and status used to be mutually exclusive, so
+        "this member's outstanding fees" silently returned every member's."""
+        member = await _make_member(member_service)
+        other = await _make_member(member_service)
+        pending = await transaction_service.create_transaction(
+            member_id=member.member_id,
+            transaction_type=TransactionType.LATE_FEE,
+            amount=Decimal("4.00"),
+        )
+        settled = await transaction_service.create_transaction(
+            member_id=member.member_id,
+            transaction_type=TransactionType.LATE_FEE,
+            amount=Decimal("6.00"),
+        )
+        await transaction_service.waive_transaction(settled.transaction_id)
+        await transaction_service.create_transaction(
+            member_id=other.member_id,
+            transaction_type=TransactionType.LATE_FEE,
+            amount=Decimal("9.00"),
+        )
+
+        results, total = await transaction_service.list_transactions(
+            member_id=member.member_id, status=TransactionStatus.PENDING
+        )
+
+        assert total == 1
+        assert results[0].transaction_id == pending.transaction_id
 
     async def test_get_transaction_not_found_raises(
         self, transaction_service: TransactionService
@@ -419,4 +454,4 @@ class TestTransactionsAPI:
 
         response = await client.get(f"/api/v1/transactions?member_id={member_id}")
         assert response.status_code == 200
-        assert len(response.json()) == 1
+        assert response.json()["total"] == 1

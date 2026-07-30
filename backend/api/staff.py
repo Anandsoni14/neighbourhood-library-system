@@ -1,17 +1,41 @@
+from enum import StrEnum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff, require_role
-from core.exceptions import AuthorizationException, ConflictError, NotFoundError
+from api.pagination import Page, PaginationParams
+from core.exceptions import AuthorizationException
+from core.pagination import SortDir
 from db.session import get_db
 from models import Staff
 from models.enums import StaffRole, StaffStatus
 from services.staff import StaffService
 
 router = APIRouter(prefix="/api/v1/staff", tags=["staff"])
+
+
+class StaffSortField(StrEnum):
+    """Columns a staff listing may be sorted by."""
+
+    EMPLOYEE_CODE = "employee_code"
+    FIRST_NAME = "first_name"
+    LAST_NAME = "last_name"
+    EMAIL = "email"
+    ROLE = "role"
+    STATUS = "status"
+
+
+_SORT_COLUMNS = {
+    StaffSortField.EMPLOYEE_CODE: Staff.employee_code,
+    StaffSortField.FIRST_NAME: Staff.first_name,
+    StaffSortField.LAST_NAME: Staff.last_name,
+    StaffSortField.EMAIL: Staff.email,
+    StaffSortField.ROLE: Staff.role,
+    StaffSortField.STATUS: Staff.status,
+}
 
 
 class StaffCreateRequest(BaseModel):
@@ -66,32 +90,41 @@ async def create_staff(
 ) -> StaffResponse:
     """Create a new staff member. ADMIN only."""
     service = StaffService(db)
-    try:
-        staff = await service.create_staff(
-            employee_code=req.employee_code,
-            first_name=req.first_name,
-            last_name=req.last_name,
-            email=req.email,
-            password=req.password,
-            phone_number=req.phone_number,
-            role=req.role,
-        )
-        return StaffResponse.model_validate(staff)
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    staff = await service.create_staff(
+        employee_code=req.employee_code,
+        first_name=req.first_name,
+        last_name=req.last_name,
+        email=req.email,
+        password=req.password,
+        phone_number=req.phone_number,
+        role=req.role,
+    )
+    return StaffResponse.model_validate(staff)
 
 
-@router.get("", response_model=list[StaffResponse])
+@router.get("", response_model=Page[StaffResponse])
 async def list_staff(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    pagination: PaginationParams = Depends(),
+    role: StaffRole | None = Query(None),
+    status: StaffStatus | None = Query(None),
+    name: str | None = Query(None, description="Matches first or last name."),
+    sort_by: StaffSortField = Query(StaffSortField.EMPLOYEE_CODE),
+    sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
     _current_staff: Staff = Depends(get_current_staff),
-) -> list[StaffResponse]:
-    """List all staff with pagination."""
+) -> Page[StaffResponse]:
+    """List staff. Every supplied filter is applied together."""
     service = StaffService(db)
-    staff = await service.list_staff(limit=limit, offset=skip)
-    return [StaffResponse.model_validate(s) for s in staff]
+    staff, total = await service.list_staff(
+        role=role,
+        status=status,
+        name=name,
+        sort_by=_SORT_COLUMNS[sort_by],
+        sort_dir=sort_dir,
+        limit=pagination.limit,
+        offset=pagination.skip,
+    )
+    return Page.create([StaffResponse.model_validate(s) for s in staff], total, pagination)
 
 
 @router.get("/{staff_id}", response_model=StaffResponse)
@@ -102,11 +135,8 @@ async def get_staff(
 ) -> StaffResponse:
     """Fetch a staff member by ID."""
     service = StaffService(db)
-    try:
-        staff = await service.get_staff(staff_id)
-        return StaffResponse.model_validate(staff)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    staff = await service.get_staff(staff_id)
+    return StaffResponse.model_validate(staff)
 
 
 @router.put("/{staff_id}", response_model=StaffResponse)
@@ -118,13 +148,8 @@ async def update_staff(
 ) -> StaffResponse:
     """Update a staff member (password changes use the dedicated endpoint). ADMIN only."""
     service = StaffService(db)
-    try:
-        staff = await service.update_staff(staff_id, **req.model_dump(exclude_unset=True))
-        return StaffResponse.model_validate(staff)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    staff = await service.update_staff(staff_id, **req.model_dump(exclude_unset=True))
+    return StaffResponse.model_validate(staff)
 
 
 @router.post("/{staff_id}/change-password", response_model=StaffResponse)
@@ -138,11 +163,8 @@ async def change_password(
     if current_staff.staff_id != staff_id and current_staff.role != StaffRole.ADMIN:
         raise AuthorizationException("You may only change your own password")
     service = StaffService(db)
-    try:
-        staff = await service.change_password(staff_id, req.new_password)
-        return StaffResponse.model_validate(staff)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    staff = await service.change_password(staff_id, req.new_password)
+    return StaffResponse.model_validate(staff)
 
 
 @router.delete("/{staff_id}", status_code=204)
@@ -153,9 +175,4 @@ async def delete_staff(
 ) -> None:
     """Delete a staff member. ADMIN only."""
     service = StaffService(db)
-    try:
-        await service.delete_staff(staff_id)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    await service.delete_staff(staff_id)

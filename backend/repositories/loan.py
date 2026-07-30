@@ -1,9 +1,7 @@
-from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from db.repository import BaseRepository
 from models import Loan
@@ -11,7 +9,7 @@ from models.enums import LoanStatus
 
 
 class LoanRepository(BaseRepository[Loan]):
-    """Loan repository with lookup and filtering capabilities."""
+    """Loan repository with lookup capabilities."""
 
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session, Loan)
@@ -27,26 +25,3 @@ class LoanRepository(BaseRepository[Loan]):
             select(Loan).where(Loan.copy_id == copy_id, Loan.status == LoanStatus.ACTIVE)
         )
         return result.scalar_one_or_none()
-
-    async def list_by_member(self, member_id: UUID) -> list[Loan]:
-        """List all loans for a given member."""
-        result = await self._session.execute(select(Loan).where(Loan.member_id == member_id))
-        return list(result.scalars().all())
-
-    async def list_by_status(self, status: LoanStatus) -> list[Loan]:
-        """List all loans with a given status."""
-        result = await self._session.execute(select(Loan).where(Loan.status == status))
-        return list(result.scalars().all())
-
-    async def list_overdue(self, as_of: datetime) -> list[Loan]:
-        """List all ACTIVE loans past due as of the given time.
-
-        Eager-loads the copy (needed for late_fee_per_day) in one query —
-        lazy="raise" forbids implicit loads, and this report can return many rows.
-        """
-        result = await self._session.execute(
-            select(Loan)
-            .options(selectinload(Loan.copy))
-            .where(Loan.status == LoanStatus.ACTIVE, Loan.due_at < as_of)
-        )
-        return list(result.scalars().all())
