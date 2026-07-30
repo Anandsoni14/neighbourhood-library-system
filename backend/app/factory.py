@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import router as auth_router
 from api.book_copies import router as book_copies_router
@@ -28,6 +29,15 @@ def create_app() -> FastAPI:
     configure_logging(settings)
 
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    # The browser SPA is served from a different origin than the API, so the
+    # allowed origins are configuration rather than a hardcoded localhost list.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allow_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(auth_router)

@@ -1,6 +1,9 @@
+import json
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -16,6 +19,28 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-me-in-production-min-32-bytes-long"
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60
+    cors_allow_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173",
+        "http://localhost",
+    ]
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def _split_comma_separated(cls, value: object) -> object:
+        """Accept `a,b` from the environment as well as a JSON list.
+
+        NoDecode suppresses pydantic-settings' default JSON decoding of complex
+        types, which would otherwise reject the comma-separated form that reads
+        naturally in a .env file. JSON is still honoured so an existing
+        deployment passing `["https://app.example.com"]` keeps working rather
+        than silently ending up with one bracket-wrapped origin.
+        """
+        if not isinstance(value, str):
+            return value
+        text = value.strip()
+        if text.startswith("["):
+            return json.loads(text)
+        return [origin.strip() for origin in text.split(",") if origin.strip()]
 
 
 @lru_cache

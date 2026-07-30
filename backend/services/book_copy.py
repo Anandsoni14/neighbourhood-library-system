@@ -3,10 +3,13 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import ConflictError, NotFoundError
+from core.pagination import SortDir
 from models import BookCopy
 from models.enums import CopyCondition, CopyStatus
 from repositories.book import BookRepository
@@ -66,18 +69,41 @@ class BookCopyService:
             raise NotFoundError(f"Book copy {copy_id} not found")
         return copy
 
-    async def list_copies(self, limit: int = 100, offset: int = 0) -> list[BookCopy]:
-        """List all copies with pagination."""
-        all_copies = await self.repository.list_all()
-        return list(all_copies)[offset : offset + limit]
+    async def list_copies(
+        self,
+        *,
+        book_id: UUID | None = None,
+        status: CopyStatus | None = None,
+        condition: CopyCondition | None = None,
+        barcode: str | None = None,
+        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_dir: SortDir = SortDir.ASC,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[BookCopy], int]:
+        """List copies matching every supplied filter, returning the page and total.
 
-    async def list_copies_by_book(self, book_id: UUID) -> list[BookCopy]:
-        """List all copies of a specific book."""
-        return await self.repository.list_by_book(book_id)
+        Filters combine, so "available copies of this book" — the query the
+        borrow workflow actually needs — is a single request.
+        """
+        filters: list[ColumnElement[bool]] = []
+        if book_id is not None:
+            filters.append(BookCopy.book_id == book_id)
+        if status is not None:
+            filters.append(BookCopy.status == status)
+        if condition is not None:
+            filters.append(BookCopy.condition == condition)
+        if barcode:
+            filters.append(BookCopy.barcode.ilike(f"%{barcode}%"))
 
-    async def list_copies_by_status(self, status: CopyStatus) -> list[BookCopy]:
-        """List all copies with a given status."""
-        return await self.repository.list_by_status(status)
+        copies, total = await self.repository.list_paginated(
+            filters=filters,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
+        return list(copies), total
 
     async def update_copy(self, copy_id: UUID, **fields: Any) -> BookCopy:
         """Update copy fields. Barcode must remain unique."""
