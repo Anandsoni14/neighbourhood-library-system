@@ -13,6 +13,14 @@ interface BooksState {
   error: string | null;
   mutationStatus: RequestStatus;
   mutationError: string | null;
+  /**
+   * The most recently *dispatched* fetchBooks requestId. Filter/sort/page
+   * changes can fire fetches faster than they resolve, so a slow response
+   * for a stale filter could otherwise land after a newer one and clobber
+   * it — fulfilled/rejected handlers ignore any requestId that doesn't
+   * match this, keeping "last dispatched wins" instead of "last resolved wins".
+   */
+  latestRequestId: string | null;
 }
 
 const initialState: BooksState = {
@@ -22,6 +30,7 @@ const initialState: BooksState = {
   error: null,
   mutationStatus: RequestStatus.IDLE,
   mutationError: null,
+  latestRequestId: null,
 };
 
 export const fetchBooks = createAsyncThunk<
@@ -82,16 +91,23 @@ const booksSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchBooks.pending, (state) => {
+      .addCase(fetchBooks.pending, (state, action) => {
         state.status = RequestStatus.LOADING;
         state.error = null;
+        state.latestRequestId = action.meta.requestId;
       })
       .addCase(fetchBooks.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.latestRequestId) {
+          return;
+        }
         state.status = RequestStatus.SUCCEEDED;
         state.items = action.payload.items;
         state.total = action.payload.total;
       })
       .addCase(fetchBooks.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestRequestId) {
+          return;
+        }
         state.status = RequestStatus.FAILED;
         state.error = action.payload ?? 'Unable to load books.';
       })

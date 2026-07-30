@@ -37,6 +37,15 @@ test.beforeEach(async ({ page }) => {
     });
   });
 
+  // The dashboard every visitor lands on after login fetches these — not
+  // exercised by this spec, so a minimal empty response is enough.
+  await page.route('**/api/v1/members**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+  await page.route('**/api/v1/loans**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+  await page.route('**/api/v1/loans/overdue**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }));
+
   await page.route('**/api/v1/books**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -82,7 +91,7 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('books catalog', () => {
   test('navigates to the Books page and lists seeded books', async ({ page }) => {
-    await page.getByRole('link', { name: /books/i }).click();
+    await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
 
     await expect(page).toHaveURL(/\/books$/);
     await expect(page.getByRole('heading', { name: 'Books' })).toBeVisible();
@@ -90,7 +99,7 @@ test.describe('books catalog', () => {
   });
 
   test('adds a new book', async ({ page }) => {
-    await page.getByRole('link', { name: /books/i }).click();
+    await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
     await expect(page).toHaveURL(/\/books$/);
 
     const dialog = page.getByRole('dialog');
@@ -103,7 +112,7 @@ test.describe('books catalog', () => {
   });
 
   test('edits an existing book', async ({ page }) => {
-    await page.getByRole('link', { name: /books/i }).click();
+    await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
     await expect(page).toHaveURL(/\/books$/);
 
     await page.getByRole('button', { name: /edit clean code/i }).click();
@@ -116,7 +125,7 @@ test.describe('books catalog', () => {
   });
 
   test('deletes a book after confirmation', async ({ page }) => {
-    await page.getByRole('link', { name: /books/i }).click();
+    await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
     await expect(page).toHaveURL(/\/books$/);
 
     await page.getByRole('button', { name: /delete clean code/i }).click();

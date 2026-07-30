@@ -17,6 +17,8 @@ interface MembersState {
   error: string | null;
   mutationStatus: RequestStatus;
   mutationError: string | null;
+  /** See booksSlice's identical field for the stale-response rationale. */
+  latestRequestId: string | null;
 }
 
 const initialState: MembersState = {
@@ -26,6 +28,7 @@ const initialState: MembersState = {
   error: null,
   mutationStatus: RequestStatus.IDLE,
   mutationError: null,
+  latestRequestId: null,
 };
 
 export const fetchMembers = createAsyncThunk<
@@ -86,16 +89,23 @@ const membersSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchMembers.pending, (state) => {
+      .addCase(fetchMembers.pending, (state, action) => {
         state.status = RequestStatus.LOADING;
         state.error = null;
+        state.latestRequestId = action.meta.requestId;
       })
       .addCase(fetchMembers.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.latestRequestId) {
+          return;
+        }
         state.status = RequestStatus.SUCCEEDED;
         state.items = action.payload.items;
         state.total = action.payload.total;
       })
       .addCase(fetchMembers.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestRequestId) {
+          return;
+        }
         state.status = RequestStatus.FAILED;
         state.error = action.payload ?? 'Unable to load members.';
       })

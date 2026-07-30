@@ -40,4 +40,20 @@ describe('Sidebar', () => {
     expect(link).toBeVisible();
     expect(link).toHaveAttribute('href', '/members');
   });
+
+  it('renders a Copies navigation link', () => {
+    render(<Sidebar />);
+
+    const link = screen.getByRole('link', { name: /copies/i });
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute('href', '/copies');
+  });
+
+  it('renders a Loans navigation link', () => {
+    render(<Sidebar />);
+
+    const link = screen.getByRole('link', { name: /loans/i });
+    expect(link).toBeVisible();
+    expect(link).toHaveAttribute('href', '/loans');
+  });
 });

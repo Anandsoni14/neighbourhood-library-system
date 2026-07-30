@@ -27,6 +27,11 @@ export const memberService = {
     return data;
   },
 
+  async get(memberId: string): Promise<Member> {
+    const { data } = await httpClient.get<Member>(`/members/${memberId}`);
+    return data;
+  },
+
   async create(payload: MemberRequest): Promise<Member> {
     const { data } = await httpClient.post<Member>('/members', payload);
     return data;

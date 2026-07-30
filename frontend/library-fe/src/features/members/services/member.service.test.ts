@@ -62,6 +62,15 @@ describe('memberService', () => {
     expect(result).toEqual({ items: [member], total: 1, skip: 0, limit: 25 });
   });
 
+  it('fetches a single member by id', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({ data: member });
+
+    const result = await memberService.get('1');
+
+    expect(httpClient.get).toHaveBeenCalledWith('/members/1');
+    expect(result).toEqual(member);
+  });
+
   it('creates a member', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({ data: member });
 

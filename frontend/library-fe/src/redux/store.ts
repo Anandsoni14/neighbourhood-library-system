@@ -4,9 +4,19 @@ import { attachAuthInterceptors, httpClient } from '@/services/httpClient';
 
 import authReducer, { logout } from './slices/authSlice';
 import booksReducer from './slices/booksSlice';
+import copiesReducer from './slices/copiesSlice';
+import dashboardReducer from './slices/dashboardSlice';
+import loansReducer from './slices/loansSlice';
 import membersReducer from './slices/membersSlice';
 
-const rootReducer = combineSlices({ auth: authReducer, books: booksReducer, members: membersReducer });
+const rootReducer = combineSlices({
+  auth: authReducer,
+  books: booksReducer,
+  members: membersReducer,
+  copies: copiesReducer,
+  loans: loansReducer,
+  dashboard: dashboardReducer,
+});
 
 export type RootState = ReturnType<typeof rootReducer>;
 

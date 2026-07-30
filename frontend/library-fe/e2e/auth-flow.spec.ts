@@ -1,4 +1,22 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
+
+// The dashboard every authenticated visitor lands on fetches counts and the
+// overdue-loans report immediately, so any test that reaches it needs these
+// mocked — otherwise Vite preview's SPA fallback returns index.html for the
+// unmocked API paths instead of a real 404, which axios accepts as valid
+// (non-JSON) data instead of throwing.
+async function mockDashboardData(page: Page) {
+  await page.route('**/api/v1/books**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+  await page.route('**/api/v1/members**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+  await page.route('**/api/v1/loans**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }));
+  // Registered after the broader /loans** mock so it wins (Playwright tries
+  // the most-recently-registered matching route first).
+  await page.route('**/api/v1/loans/overdue**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }));
+}
 
 const STAFF_FIXTURE = {
   staff_id: '11111111-1111-1111-1111-111111111111',
@@ -37,6 +55,7 @@ test.describe('unauthenticated', () => {
 
 test.describe('login', () => {
   test('signs in and lands on the dashboard inside the app shell', async ({ page }) => {
+    await mockDashboardData(page);
     await page.route('**/api/v1/auth/login', async (route) => {
       await route.fulfill({
         json: { access_token: 'e2e-token', token_type: 'bearer', staff: STAFF_FIXTURE },
@@ -75,6 +94,7 @@ test.describe('login', () => {
 
 test.describe('authenticated session', () => {
   test.beforeEach(async ({ page }) => {
+    await mockDashboardData(page);
     await page.route('**/api/v1/auth/login', async (route) => {
       await route.fulfill({
         json: { access_token: 'e2e-token', token_type: 'bearer', staff: STAFF_FIXTURE },

@@ -1,6 +1,8 @@
 import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined';
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined';
+import SwapHorizOutlinedIcon from '@mui/icons-material/SwapHorizOutlined';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -25,6 +27,8 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', path: '/dashboard', icon: <DashboardOutlinedIcon fontSize="small" /> },
   { label: 'Books', path: '/books', icon: <MenuBookOutlinedIcon fontSize="small" /> },
   { label: 'Members', path: '/members', icon: <PeopleOutlinedIcon fontSize="small" /> },
+  { label: 'Copies', path: '/copies', icon: <Inventory2OutlinedIcon fontSize="small" /> },
+  { label: 'Loans', path: '/loans', icon: <SwapHorizOutlinedIcon fontSize="small" /> },
 ];
 
 export function Sidebar() {

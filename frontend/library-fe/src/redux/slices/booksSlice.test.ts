@@ -28,6 +28,7 @@ const initialState = {
   error: null,
   mutationStatus: RequestStatus.IDLE,
   mutationError: null,
+  latestRequestId: 'requestId',
 };
 
 describe('booksSlice', () => {
@@ -65,6 +66,31 @@ describe('booksSlice', () => {
 
     expect(state.status).toBe(RequestStatus.FAILED);
     expect(state.error).toBe('Unable to load books.');
+  });
+
+  it('ignores a stale fetchBooks.fulfilled response from a superseded request', () => {
+    const arg = { skip: 0, limit: 25, sortBy: 'title' as const, sortDir: 'asc' as const };
+    let state = booksReducer(initialState, fetchBooks.pending('old-request', arg));
+    state = booksReducer(state, fetchBooks.pending('new-request', arg));
+
+    state = booksReducer(state, fetchBooks.fulfilled({ items: [book], total: 1 }, 'old-request', arg));
+
+    expect(state.items).toEqual([]);
+    expect(state.status).toBe(RequestStatus.LOADING);
+  });
+
+  it('ignores a stale fetchBooks.rejected response from a superseded request', () => {
+    const arg = { skip: 0, limit: 25, sortBy: 'title' as const, sortDir: 'asc' as const };
+    let state = booksReducer(initialState, fetchBooks.pending('old-request', arg));
+    state = booksReducer(state, fetchBooks.pending('new-request', arg));
+
+    state = booksReducer(
+      state,
+      fetchBooks.rejected(new Error('rejected'), 'old-request', arg, 'Unable to load books.'),
+    );
+
+    expect(state.error).toBeNull();
+    expect(state.status).toBe(RequestStatus.LOADING);
   });
 
   it('createBook.fulfilled marks the mutation as succeeded', () => {

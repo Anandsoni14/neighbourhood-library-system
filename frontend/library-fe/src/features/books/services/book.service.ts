@@ -28,6 +28,11 @@ export const bookService = {
     return data;
   },
 
+  async get(bookId: string): Promise<Book> {
+    const { data } = await httpClient.get<Book>(`/books/${bookId}`);
+    return data;
+  },
+
   async create(payload: BookRequest): Promise<Book> {
     const { data } = await httpClient.post<Book>('/books', payload);
     return data;

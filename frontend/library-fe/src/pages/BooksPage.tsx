@@ -30,7 +30,11 @@ import { BookFormDialog } from '@/features/books/components/BookFormDialog';
 import { useBooks } from '@/features/books/hooks/useBooks';
 import { BookSortField } from '@/features/books/types/book.types';
 import type { Book, BookRequest } from '@/features/books/types/book.types';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { SortDir } from '@/types/common';
+
+/** How long a filter text field must sit idle before it triggers a fetch. */
+const FILTER_DEBOUNCE_MS = 300;
 
 interface SortableColumn {
   field: BookSortField;
@@ -69,6 +73,7 @@ export function BooksPage() {
   } = useBooks();
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const debouncedFilters = useDebouncedValue(filters, FILTER_DEBOUNCE_MS);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [sortBy, setSortBy] = useState<BookSortField>(BookSortField.TITLE);
@@ -85,16 +90,16 @@ export function BooksPage() {
     void fetchBooks({
       skip: page * rowsPerPage,
       limit: rowsPerPage,
-      title: filters.title,
-      author: filters.author,
-      category: filters.category,
-      isbn: filters.isbn,
+      title: debouncedFilters.title,
+      author: debouncedFilters.author,
+      category: debouncedFilters.category,
+      isbn: debouncedFilters.isbn,
       sortBy,
       sortDir,
     });
     // fetchBooks is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, sortBy, sortDir, filters]);
+  }, [page, rowsPerPage, sortBy, sortDir, debouncedFilters]);
 
   const handleFilterChange = (field: keyof Filters) => (event: ChangeEvent<HTMLInputElement>) => {
     setFilters((prev) => ({ ...prev, [field]: event.target.value }));

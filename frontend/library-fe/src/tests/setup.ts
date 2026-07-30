@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 
-import { resetBooks, resetMembers } from './handlers';
+import { resetBooks, resetCopies, resetLoans, resetMembers } from './handlers';
 import { server } from './server';
 
 // Node 22+'s own experimental `localStorage` global shadows jsdom's working
@@ -23,6 +23,8 @@ afterEach(() => {
   server.resetHandlers();
   resetBooks();
   resetMembers();
+  resetCopies();
+  resetLoans();
   localStorage.clear();
 });
 

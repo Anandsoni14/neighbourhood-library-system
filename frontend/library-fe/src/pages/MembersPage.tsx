@@ -35,8 +35,12 @@ import { MemberFormDialog } from '@/features/members/components/MemberFormDialog
 import { useMembers } from '@/features/members/hooks/useMembers';
 import { MemberSortField } from '@/features/members/types/member.types';
 import type { Member, MemberRequest } from '@/features/members/types/member.types';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { MembershipStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
+
+/** How long a filter text field must sit idle before it triggers a fetch. */
+const FILTER_DEBOUNCE_MS = 300;
 
 interface SortableColumn {
   field: MemberSortField;
@@ -80,6 +84,10 @@ export function MembersPage() {
   } = useMembers();
 
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+  // Only the free-text fields are debounced — `status` is a discrete Select
+  // choice, not a per-keystroke value, so it should filter immediately.
+  const debouncedName = useDebouncedValue(filters.name, FILTER_DEBOUNCE_MS);
+  const debouncedEmail = useDebouncedValue(filters.email, FILTER_DEBOUNCE_MS);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [sortBy, setSortBy] = useState<MemberSortField>(MemberSortField.LAST_NAME);
@@ -96,15 +104,15 @@ export function MembersPage() {
     void fetchMembers({
       skip: page * rowsPerPage,
       limit: rowsPerPage,
-      name: filters.name,
-      email: filters.email,
+      name: debouncedName,
+      email: debouncedEmail,
       status: filters.status || undefined,
       sortBy,
       sortDir,
     });
     // fetchMembers is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, sortBy, sortDir, filters]);
+  }, [page, rowsPerPage, sortBy, sortDir, debouncedName, debouncedEmail, filters.status]);
 
   const handleFilterChange = (field: 'name' | 'email') => (event: ChangeEvent<HTMLInputElement>) => {
     setFilters((prev) => ({ ...prev, [field]: event.target.value }));

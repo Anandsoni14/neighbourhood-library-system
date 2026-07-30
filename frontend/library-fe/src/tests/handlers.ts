@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw';
 
+import type { BookCopy } from '@/features/copies/types/copy.types';
+import type { Loan } from '@/features/loans/types/loan.types';
 import type { Member } from '@/features/members/types/member.types';
 
 // Matches the jsdom `url` pinned in vite.config.ts's test.environmentOptions.
@@ -77,6 +79,55 @@ export const memberFixtures: Member[] = [
   },
 ];
 
+const FIRST_BOOK_ID = '22222222-2222-2222-2222-222222222221';
+const SECOND_BOOK_ID = '22222222-2222-2222-2222-222222222222';
+const FIRST_COPY_ID = '44444444-4444-4444-4444-444444444441';
+const SECOND_COPY_ID = '44444444-4444-4444-4444-444444444442';
+const FIRST_MEMBER_ID = '33333333-3333-3333-3333-333333333331';
+
+export const copyFixtures: BookCopy[] = [
+  {
+    copy_id: FIRST_COPY_ID,
+    book_id: FIRST_BOOK_ID,
+    barcode: 'BC-001',
+    shelf_code: 'A1',
+    condition: 'NEW',
+    status: 'AVAILABLE',
+    max_borrow_days: 14,
+    late_fee_per_day: 5,
+  },
+  {
+    copy_id: SECOND_COPY_ID,
+    book_id: SECOND_BOOK_ID,
+    barcode: 'BC-002',
+    shelf_code: 'B2',
+    condition: 'GOOD',
+    status: 'BORROWED',
+    max_borrow_days: 14,
+    late_fee_per_day: 5,
+  },
+];
+
+export const loanFixtures: Loan[] = [
+  {
+    loan_id: '55555555-5555-5555-5555-555555555551',
+    copy_id: SECOND_COPY_ID,
+    member_id: FIRST_MEMBER_ID,
+    issued_by_staff_id: staffFixture.staff_id,
+    received_by_staff_id: null,
+    borrowed_at: '2026-07-01T00:00:00Z',
+    due_at: '2026-07-15T00:00:00Z',
+    returned_at: null,
+    borrow_condition: 'GOOD',
+    return_condition: null,
+    status: 'ACTIVE',
+    calculated_fine: 0,
+    remarks: null,
+    created_at: '2026-07-01T00:00:00Z',
+    closed_at: null,
+  },
+];
+
 /**
  * A mutable working copy so POST/PUT/DELETE handlers can simulate real
  * persistence within a test. `resetBooks` (called from setup.ts's afterEach)
@@ -93,6 +144,20 @@ let members = memberFixtures.map((member) => ({ ...member }));
 
 export function resetMembers(): void {
   members = memberFixtures.map((member) => ({ ...member }));
+}
+
+/** Same rationale as `resetBooks`, for the copy fixture store. */
+let copies = copyFixtures.map((copy) => ({ ...copy }));
+
+export function resetCopies(): void {
+  copies = copyFixtures.map((copy) => ({ ...copy }));
+}
+
+/** Same rationale as `resetBooks`, for the loan fixture store. */
+let loans = loanFixtures.map((loan) => ({ ...loan }));
+
+export function resetLoans(): void {
+  loans = loanFixtures.map((loan) => ({ ...loan }));
 }
 
 function matches(value: string | null, query: string | null, exact = false): boolean {
@@ -157,6 +222,14 @@ export const handlers = [
     return HttpResponse.json(created, { status: 201 });
   }),
 
+  http.get(`${API_ORIGIN}/books/:bookId`, ({ params }) => {
+    const book = books.find((candidate) => candidate.book_id === params.bookId);
+    if (!book) {
+      return HttpResponse.json({ detail: 'Book not found' }, { status: 404 });
+    }
+    return HttpResponse.json(book);
+  }),
+
   http.put(`${API_ORIGIN}/books/:bookId`, async ({ request, params }) => {
     const body = (await request.json()) as Omit<(typeof books)[number], 'book_id'>;
     const index = books.findIndex((book) => book.book_id === params.bookId);
@@ -216,6 +289,14 @@ export const handlers = [
     return HttpResponse.json(created, { status: 201 });
   }),
 
+  http.get(`${API_ORIGIN}/members/:memberId`, ({ params }) => {
+    const member = members.find((candidate) => candidate.member_id === params.memberId);
+    if (!member) {
+      return HttpResponse.json({ detail: 'Member not found' }, { status: 404 });
+    }
+    return HttpResponse.json(member);
+  }),
+
   http.put(`${API_ORIGIN}/members/:memberId`, async ({ request, params }) => {
     const body = (await request.json()) as Omit<(typeof members)[number], 'member_id'>;
     const index = members.findIndex((member) => member.member_id === params.memberId);
@@ -234,5 +315,241 @@ export const handlers = [
     }
     members = [...members.slice(0, index), ...members.slice(index + 1)];
     return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get(`${API_ORIGIN}/book-copies`, ({ request }) => {
+    const url = new URL(request.url);
+    const skip = Number(url.searchParams.get('skip') ?? '0');
+    const limit = Number(url.searchParams.get('limit') ?? '100');
+    const bookId = url.searchParams.get('book_id');
+    const status = url.searchParams.get('status');
+    const condition = url.searchParams.get('condition');
+    const barcode = url.searchParams.get('barcode');
+    const sortBy = (url.searchParams.get('sort_by') ?? 'barcode') as keyof (typeof copies)[number];
+    const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
+
+    const filtered = copies.filter(
+      (copy) =>
+        (bookId ? copy.book_id === bookId : true) &&
+        (status ? copy.status === status : true) &&
+        (condition ? copy.condition === condition : true) &&
+        matches(copy.barcode, barcode),
+    );
+
+    const sorted = [...filtered].sort((a, b) => {
+      const left = a[sortBy];
+      const right = b[sortBy];
+      if (left === right) {
+        return 0;
+      }
+      const direction = left != null && right != null && left > right ? 1 : -1;
+      return sortDir === 'desc' ? -direction : direction;
+    });
+
+    const page = sorted.slice(skip, skip + limit);
+
+    return HttpResponse.json({ items: page, total: filtered.length, skip, limit });
+  }),
+
+  http.get(`${API_ORIGIN}/book-copies/:copyId`, ({ params }) => {
+    const copy = copies.find((candidate) => candidate.copy_id === params.copyId);
+    if (!copy) {
+      return HttpResponse.json({ detail: 'Copy not found' }, { status: 404 });
+    }
+    return HttpResponse.json(copy);
+  }),
+
+  http.post(`${API_ORIGIN}/book-copies`, async ({ request }) => {
+    const body = (await request.json()) as {
+      book_id: string;
+      barcode: string;
+      shelf_code?: string | null;
+      condition?: BookCopy['condition'];
+      max_borrow_days?: number;
+      late_fee_per_day?: number;
+    };
+    const created: BookCopy = {
+      copy_id: `generated-${String(copies.length + 1)}`,
+      book_id: body.book_id,
+      barcode: body.barcode,
+      shelf_code: body.shelf_code ?? null,
+      condition: body.condition ?? 'NEW',
+      status: 'AVAILABLE',
+      max_borrow_days: body.max_borrow_days ?? 14,
+      late_fee_per_day: body.late_fee_per_day ?? 5,
+    };
+    copies = [...copies, created];
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.put(`${API_ORIGIN}/book-copies/:copyId`, async ({ request, params }) => {
+    const body = (await request.json()) as Partial<BookCopy>;
+    const index = copies.findIndex((copy) => copy.copy_id === params.copyId);
+    const existing = copies[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Copy not found' }, { status: 404 });
+    }
+    const updated: BookCopy = { ...existing, ...body, copy_id: params.copyId as string };
+    copies = [...copies.slice(0, index), updated, ...copies.slice(index + 1)];
+    return HttpResponse.json(updated);
+  }),
+
+  http.delete(`${API_ORIGIN}/book-copies/:copyId`, ({ params }) => {
+    const index = copies.findIndex((copy) => copy.copy_id === params.copyId);
+    if (index === -1) {
+      return HttpResponse.json({ detail: 'Copy not found' }, { status: 404 });
+    }
+    copies = [...copies.slice(0, index), ...copies.slice(index + 1)];
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.get(`${API_ORIGIN}/loans`, ({ request }) => {
+    const url = new URL(request.url);
+    const skip = Number(url.searchParams.get('skip') ?? '0');
+    const limit = Number(url.searchParams.get('limit') ?? '100');
+    const memberId = url.searchParams.get('member_id');
+    const copyId = url.searchParams.get('copy_id');
+    const status = url.searchParams.get('status');
+    const sortBy = (url.searchParams.get('sort_by') ?? 'borrowed_at') as keyof (typeof loans)[number];
+    const sortDir = url.searchParams.get('sort_dir') ?? 'desc';
+
+    const filtered = loans.filter(
+      (loan) =>
+        (memberId ? loan.member_id === memberId : true) &&
+        (copyId ? loan.copy_id === copyId : true) &&
+        (status ? loan.status === status : true),
+    );
+
+    const sorted = [...filtered].sort((a, b) => {
+      const left = a[sortBy];
+      const right = b[sortBy];
+      if (left === right) {
+        return 0;
+      }
+      const direction = left != null && right != null && left > right ? 1 : -1;
+      return sortDir === 'desc' ? -direction : direction;
+    });
+
+    const page = sorted.slice(skip, skip + limit);
+
+    return HttpResponse.json({ items: page, total: filtered.length, skip, limit });
+  }),
+
+  // Declared before /loans/:loanId so this static path isn't captured by the
+  // loanId path parameter, mirroring the backend's own route ordering.
+  http.get(`${API_ORIGIN}/loans/overdue`, ({ request }) => {
+    const url = new URL(request.url);
+    const skip = Number(url.searchParams.get('skip') ?? '0');
+    const limit = Number(url.searchParams.get('limit') ?? '100');
+    const sortBy = (url.searchParams.get('sort_by') ?? 'due_at') as keyof (typeof loans)[number];
+    const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
+    const now = new Date();
+
+    const overdue = loans
+      .filter((loan) => loan.status === 'ACTIVE' && new Date(loan.due_at) < now)
+      .map((loan) => {
+        const copy = copies.find((candidate) => candidate.copy_id === loan.copy_id);
+        const daysOverdue = Math.ceil(
+          (now.getTime() - new Date(loan.due_at).getTime()) / (24 * 60 * 60 * 1000),
+        );
+        return {
+          ...loan,
+          days_overdue: daysOverdue,
+          estimated_fine: daysOverdue * (copy?.late_fee_per_day ?? 0),
+        };
+      });
+
+    const sorted = [...overdue].sort((a, b) => {
+      const left = a[sortBy];
+      const right = b[sortBy];
+      if (left === right) {
+        return 0;
+      }
+      const direction = left != null && right != null && left > right ? 1 : -1;
+      return sortDir === 'desc' ? -direction : direction;
+    });
+
+    const page = sorted.slice(skip, skip + limit);
+
+    return HttpResponse.json({ items: page, total: overdue.length, skip, limit });
+  }),
+
+  http.get(`${API_ORIGIN}/loans/:loanId`, ({ params }) => {
+    const loan = loans.find((candidate) => candidate.loan_id === params.loanId);
+    if (!loan) {
+      return HttpResponse.json({ detail: 'Loan not found' }, { status: 404 });
+    }
+    return HttpResponse.json(loan);
+  }),
+
+  http.post(`${API_ORIGIN}/loans`, async ({ request }) => {
+    const body = (await request.json()) as {
+      copy_id: string;
+      member_id: string;
+      remarks?: string | null;
+    };
+    const now = new Date();
+    const dueAt = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+    const created: Loan = {
+      loan_id: `generated-${String(loans.length + 1)}`,
+      copy_id: body.copy_id,
+      member_id: body.member_id,
+      issued_by_staff_id: staffFixture.staff_id,
+      received_by_staff_id: null,
+      borrowed_at: now.toISOString(),
+      due_at: dueAt.toISOString(),
+      returned_at: null,
+      borrow_condition: 'GOOD',
+      return_condition: null,
+      status: 'ACTIVE',
+      calculated_fine: 0,
+      remarks: body.remarks ?? null,
+      created_at: now.toISOString(),
+      closed_at: null,
+    };
+    loans = [...loans, created];
+
+    const copyIndex = copies.findIndex((copy) => copy.copy_id === body.copy_id);
+    const existingCopy = copies[copyIndex];
+    if (copyIndex !== -1 && existingCopy) {
+      const borrowed: BookCopy = { ...existingCopy, status: 'BORROWED' };
+      copies = [...copies.slice(0, copyIndex), borrowed, ...copies.slice(copyIndex + 1)];
+    }
+
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.post(`${API_ORIGIN}/loans/:loanId/return`, async ({ request, params }) => {
+    const body = (await request.json()) as { return_condition: BookCopy['condition']; remarks?: string | null };
+    const index = loans.findIndex((loan) => loan.loan_id === params.loanId);
+    const existingLoan = loans[index];
+    if (index === -1 || !existingLoan) {
+      return HttpResponse.json({ detail: 'Loan not found' }, { status: 404 });
+    }
+    const now = new Date().toISOString();
+    const updated: Loan = {
+      ...existingLoan,
+      status: 'RETURNED',
+      returned_at: now,
+      closed_at: now,
+      return_condition: body.return_condition,
+      remarks: body.remarks ?? existingLoan.remarks,
+      calculated_fine: 0,
+    };
+    loans = [...loans.slice(0, index), updated, ...loans.slice(index + 1)];
+
+    const copyIndex = copies.findIndex((copy) => copy.copy_id === updated.copy_id);
+    const existingCopy = copies[copyIndex];
+    if (copyIndex !== -1 && existingCopy) {
+      const nextStatus = body.return_condition === 'DAMAGED' ? 'MAINTENANCE' : 'AVAILABLE';
+      const returned: BookCopy = {
+        ...existingCopy,
+        condition: body.return_condition,
+        status: nextStatus,
+      };
+      copies = [...copies.slice(0, copyIndex), returned, ...copies.slice(copyIndex + 1)];
+    }
+
+    return HttpResponse.json(updated);
   }),
 ];

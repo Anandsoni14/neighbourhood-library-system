@@ -35,6 +35,7 @@ const initialState = {
   error: null,
   mutationStatus: RequestStatus.IDLE,
   mutationError: null,
+  latestRequestId: 'requestId',
 };
 
 describe('membersSlice', () => {
@@ -72,6 +73,20 @@ describe('membersSlice', () => {
 
     expect(state.status).toBe(RequestStatus.FAILED);
     expect(state.error).toBe('Unable to load members.');
+  });
+
+  it('ignores a stale fetchMembers.fulfilled response from a superseded request', () => {
+    const arg = { skip: 0, limit: 25, sortBy: 'last_name' as const, sortDir: 'asc' as const };
+    let state = membersReducer(initialState, fetchMembers.pending('old-request', arg));
+    state = membersReducer(state, fetchMembers.pending('new-request', arg));
+
+    state = membersReducer(
+      state,
+      fetchMembers.fulfilled({ items: [member], total: 1 }, 'old-request', arg),
+    );
+
+    expect(state.items).toEqual([]);
+    expect(state.status).toBe(RequestStatus.LOADING);
   });
 
   it('createMember.fulfilled marks the mutation as succeeded', () => {

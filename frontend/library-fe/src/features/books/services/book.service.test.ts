@@ -56,6 +56,15 @@ describe('bookService', () => {
     expect(result).toEqual({ items: [book], total: 1, skip: 0, limit: 25 });
   });
 
+  it('fetches a single book by id', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({ data: book });
+
+    const result = await bookService.get('1');
+
+    expect(httpClient.get).toHaveBeenCalledWith('/books/1');
+    expect(result).toEqual(book);
+  });
+
   it('creates a book', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({ data: book });
 
