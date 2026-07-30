@@ -10,12 +10,15 @@ import { type FormEvent, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
 interface LocationState {
   from?: { pathname: string };
 }
 
 export function LoginPage() {
+  useDocumentTitle('Sign in');
+
   const { login, isAuthenticated, isSubmitting, error } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();

@@ -3,7 +3,11 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+
 export function NotFoundPage() {
+  useDocumentTitle('Page not found');
+
   return (
     <Box
       sx={{

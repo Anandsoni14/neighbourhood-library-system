@@ -4,15 +4,9 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Paper from '@mui/material/Paper';
-import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -26,11 +20,14 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { type ChangeEvent, useEffect, useState } from 'react';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { BookFormDialog } from '@/features/books/components/BookFormDialog';
 import { useBooks } from '@/features/books/hooks/useBooks';
 import { BookSortField } from '@/features/books/types/book.types';
 import type { Book, BookRequest } from '@/features/books/types/book.types';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { SortDir } from '@/types/common';
 
 /** How long a filter text field must sit idle before it triggers a fetch. */
@@ -58,6 +55,8 @@ interface Filters {
 const emptyFilters: Filters = { title: '', author: '', category: '', isbn: '' };
 
 export function BooksPage() {
+  useDocumentTitle('Books');
+
   const {
     books,
     total,
@@ -295,32 +294,21 @@ export function BooksPage() {
         onSubmit={(payload) => void handleFormSubmit(payload)}
       />
 
-      <Dialog open={deletingBook !== null} onClose={() => setDeletingBook(null)}>
-        <DialogTitle>Delete book</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Delete “{deletingBook?.title}”? This cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeletingBook(null)} disabled={isMutating}>
-            Cancel
-          </Button>
-          <Button color="error" onClick={() => void handleConfirmDelete()} disabled={isMutating}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={deletingBook !== null}
+        title="Delete book"
+        description={`Delete "${deletingBook?.title ?? ''}"? This cannot be undone.`}
+        isConfirming={isMutating}
+        onCancel={() => setDeletingBook(null)}
+        onConfirm={() => void handleConfirmDelete()}
+      />
 
-      <Snackbar
+      <FeedbackSnackbar
         open={mutationError !== null && !formOpen && deletingBook === null}
-        autoHideDuration={6000}
+        message={mutationError}
+        severity="error"
         onClose={clearMutationError}
-      >
-        <Alert severity="error" onClose={clearMutationError}>
-          {mutationError}
-        </Alert>
-      </Snackbar>
+      />
     </Box>
   );
 }

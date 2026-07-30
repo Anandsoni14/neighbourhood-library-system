@@ -30,33 +30,33 @@ describe('AppRoutes', () => {
     expect(screen.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   });
 
-  it('redirects an authenticated visitor at / to the dashboard, inside the app shell', () => {
+  it('redirects an authenticated visitor at / to the dashboard, inside the app shell', async () => {
     render(<AppRoutes />, { initialEntries: ['/'], preloadedState: authenticatedState });
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeVisible();
   });
 
-  it('renders the Books page inside the app shell for an authenticated visitor', () => {
+  it('renders the Books page inside the app shell for an authenticated visitor', async () => {
     render(<AppRoutes />, { initialEntries: ['/books'], preloadedState: authenticatedState });
 
-    expect(screen.getByRole('heading', { name: 'Books' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Books' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Library Management System' })).toBeVisible();
   });
 
-  it('renders the 404 page for an unknown path', () => {
+  it('renders the 404 page for an unknown path', async () => {
     render(<AppRoutes />, {
       initialEntries: ['/this-page-does-not-exist'],
       preloadedState: authenticatedState,
     });
 
-    expect(screen.getByText('404')).toBeVisible();
+    expect(await screen.findByText('404')).toBeVisible();
   });
 
-  it('renders the 404 page for an unknown path even when unauthenticated', () => {
+  it('renders the 404 page for an unknown path even when unauthenticated', async () => {
     render(<AppRoutes />, { initialEntries: ['/this-page-does-not-exist'] });
 
-    expect(screen.getByText('404')).toBeVisible();
+    expect(await screen.findByText('404')).toBeVisible();
   });
 });

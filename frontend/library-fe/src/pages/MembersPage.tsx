@@ -5,11 +5,6 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
 import FormControl from '@mui/material/FormControl';
 import IconButton from '@mui/material/IconButton';
 import InputLabel from '@mui/material/InputLabel';
@@ -17,7 +12,6 @@ import LinearProgress from '@mui/material/LinearProgress';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Select, { type SelectChangeEvent } from '@mui/material/Select';
-import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -31,11 +25,14 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { type ChangeEvent, useEffect, useState } from 'react';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { MemberFormDialog } from '@/features/members/components/MemberFormDialog';
 import { useMembers } from '@/features/members/hooks/useMembers';
 import { MemberSortField } from '@/features/members/types/member.types';
 import type { Member, MemberRequest } from '@/features/members/types/member.types';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { MembershipStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
 
@@ -69,6 +66,8 @@ interface Filters {
 const emptyFilters: Filters = { name: '', email: '', status: '' };
 
 export function MembersPage() {
+  useDocumentTitle('Members');
+
   const {
     members,
     total,
@@ -321,33 +320,21 @@ export function MembersPage() {
         onSubmit={(payload) => void handleFormSubmit(payload)}
       />
 
-      <Dialog open={deletingMember !== null} onClose={() => setDeletingMember(null)}>
-        <DialogTitle>Delete member</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Delete “{deletingMember?.first_name} {deletingMember?.last_name}”? This cannot be
-            undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeletingMember(null)} disabled={isMutating}>
-            Cancel
-          </Button>
-          <Button color="error" onClick={() => void handleConfirmDelete()} disabled={isMutating}>
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={deletingMember !== null}
+        title="Delete member"
+        description={`Delete "${deletingMember?.first_name ?? ''} ${deletingMember?.last_name ?? ''}"? This cannot be undone.`}
+        isConfirming={isMutating}
+        onCancel={() => setDeletingMember(null)}
+        onConfirm={() => void handleConfirmDelete()}
+      />
 
-      <Snackbar
+      <FeedbackSnackbar
         open={mutationError !== null && !formOpen && deletingMember === null}
-        autoHideDuration={6000}
+        message={mutationError}
+        severity="error"
         onClose={clearMutationError}
-      >
-        <Alert severity="error" onClose={clearMutationError}>
-          {mutationError}
-        </Alert>
-      </Snackbar>
+      />
     </Box>
   );
 }

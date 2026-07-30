@@ -33,7 +33,7 @@ test.describe('app boot', () => {
   test('renders the title', async ({ page }) => {
     await page.goto('/login');
 
-    await expect(page).toHaveTitle('Library Management System');
+    await expect(page).toHaveTitle('Sign in · Library Management System');
   });
 });
 

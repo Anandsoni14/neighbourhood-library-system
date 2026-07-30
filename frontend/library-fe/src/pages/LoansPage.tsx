@@ -11,7 +11,6 @@ import LinearProgress from '@mui/material/LinearProgress';
 import MenuItem from '@mui/material/MenuItem';
 import Paper from '@mui/material/Paper';
 import Select, { type SelectChangeEvent } from '@mui/material/Select';
-import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -25,6 +24,7 @@ import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { type ChangeEvent, useEffect, useState } from 'react';
 
+import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { IssueLoanDialog } from '@/features/loans/components/IssueLoanDialog';
 import { ReturnLoanDialog } from '@/features/loans/components/ReturnLoanDialog';
 import { useLoanEnrichment } from '@/features/loans/hooks/useLoanEnrichment';
@@ -32,6 +32,7 @@ import { useLoans } from '@/features/loans/hooks/useLoans';
 import { LoanSortField } from '@/features/loans/types/loan.types';
 import type { Loan, LoanIssueRequest, LoanReturnRequest } from '@/features/loans/types/loan.types';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { LoanStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
 
@@ -67,6 +68,8 @@ function formatDate(value: string | null): string {
 }
 
 export function LoansPage() {
+  useDocumentTitle('Loans');
+
   const {
     loans,
     total,
@@ -338,25 +341,19 @@ export function LoansPage() {
         onSubmit={(payload) => void handleReturnSubmit(payload)}
       />
 
-      <Snackbar
+      <FeedbackSnackbar
         open={mutationError !== null && !issueOpen && returningLoan === null}
-        autoHideDuration={6000}
+        message={mutationError}
+        severity="error"
         onClose={clearMutationError}
-      >
-        <Alert severity="error" onClose={clearMutationError}>
-          {mutationError}
-        </Alert>
-      </Snackbar>
+      />
 
-      <Snackbar
+      <FeedbackSnackbar
         open={justReturnedFine !== null}
-        autoHideDuration={6000}
+        message={`Loan returned. Fine: $${(justReturnedFine ?? 0).toFixed(2)}`}
+        severity="success"
         onClose={() => setJustReturnedFine(null)}
-      >
-        <Alert severity="success" onClose={() => setJustReturnedFine(null)}>
-          {`Loan returned. Fine: $${(justReturnedFine ?? 0).toFixed(2)}`}
-        </Alert>
-      </Snackbar>
+      />
     </Box>
   );
 }

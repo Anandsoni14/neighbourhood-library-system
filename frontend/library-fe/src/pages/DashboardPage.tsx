@@ -12,7 +12,6 @@ import Grid from '@mui/material/Grid';
 import IconButton from '@mui/material/IconButton';
 import LinearProgress from '@mui/material/LinearProgress';
 import Paper from '@mui/material/Paper';
-import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -27,6 +26,7 @@ import type { ReactElement } from 'react';
 import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
 import { ReturnLoanDialog } from '@/features/loans/components/ReturnLoanDialog';
@@ -34,6 +34,7 @@ import { useLoanEnrichment } from '@/features/loans/hooks/useLoanEnrichment';
 import { useLoans } from '@/features/loans/hooks/useLoans';
 import { LoanSortField } from '@/features/loans/types/loan.types';
 import type { LoanReturnRequest, OverdueLoan } from '@/features/loans/types/loan.types';
+import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { SortDir } from '@/types/common';
 
 interface SummaryCard {
@@ -58,6 +59,8 @@ function formatDate(value: string): string {
 }
 
 export function DashboardPage() {
+  useDocumentTitle('Dashboard');
+
   const { staff } = useAuth();
   const { counts, overdueItems, overdueTotal, error, isLoading, fetchDashboard } = useDashboard();
   const { members, copies, books } = useLoanEnrichment(overdueItems);
@@ -262,25 +265,19 @@ export function DashboardPage() {
         onSubmit={(payload) => void handleReturnSubmit(payload)}
       />
 
-      <Snackbar
+      <FeedbackSnackbar
         open={mutationError !== null && returningLoan === null}
-        autoHideDuration={6000}
+        message={mutationError}
+        severity="error"
         onClose={clearMutationError}
-      >
-        <Alert severity="error" onClose={clearMutationError}>
-          {mutationError}
-        </Alert>
-      </Snackbar>
+      />
 
-      <Snackbar
+      <FeedbackSnackbar
         open={justReturnedFine !== null}
-        autoHideDuration={6000}
+        message={`Loan returned. Fine: $${(justReturnedFine ?? 0).toFixed(2)}`}
+        severity="success"
         onClose={() => setJustReturnedFine(null)}
-      >
-        <Alert severity="success" onClose={() => setJustReturnedFine(null)}>
-          {`Loan returned. Fine: $${(justReturnedFine ?? 0).toFixed(2)}`}
-        </Alert>
-      </Snackbar>
+      />
     </Box>
   );
 }
