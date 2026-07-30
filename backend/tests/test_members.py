@@ -135,7 +135,9 @@ class TestMemberService:
 class TestMembersAPI:
     """Test Members API endpoints."""
 
-    async def test_create_member_endpoint(self, client: AsyncClient) -> None:
+    async def test_create_member_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         response = await client.post(
             "/api/v1/members",
             json={
@@ -143,68 +145,234 @@ class TestMembersAPI:
                 "last_name": "Doe",
                 "email": "jane.api@example.com",
             },
+            headers=librarian_headers,
         )
         assert response.status_code == 201
         data = response.json()
         assert data["email"] == "jane.api@example.com"
         assert data["membership_status"] == "ACTIVE"
 
-    async def test_create_member_invalid_email(self, client: AsyncClient) -> None:
+    async def test_create_member_endpoint_no_token_401(self, client: AsyncClient) -> None:
+        response = await client.post(
+            "/api/v1/members",
+            json={"first_name": "Jane", "last_name": "Doe", "email": "no-token@example.com"},
+        )
+        assert response.status_code == 401
+
+    async def test_create_member_invalid_email(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         response = await client.post(
             "/api/v1/members",
             json={"first_name": "Jane", "last_name": "Doe", "email": "not-an-email"},
+            headers=librarian_headers,
         )
         assert response.status_code == 422
 
-    async def test_list_members_endpoint(self, client: AsyncClient) -> None:
-        response = await client.get("/api/v1/members")
+    @pytest.mark.parametrize("phone_number", ["123", "12345678901", "98a6543210", "12345 6789"])
+    async def test_create_member_rejects_invalid_phone_number(
+        self, client: AsyncClient, librarian_headers: dict[str, str], phone_number: str
+    ) -> None:
+        response = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Jane",
+                "last_name": "Doe",
+                "email": "phone-invalid@example.com",
+                "phone_number": phone_number,
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_create_member_accepts_valid_phone_number(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Jane",
+                "last_name": "Doe",
+                "email": "phone-valid@example.com",
+                "phone_number": "9876543210",
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["phone_number"] == "9876543210"
+
+    @pytest.mark.parametrize("postal_code", ["12A45", "SW1A 1AA", "abcde"])
+    async def test_create_member_rejects_invalid_postal_code(
+        self, client: AsyncClient, librarian_headers: dict[str, str], postal_code: str
+    ) -> None:
+        response = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Jane",
+                "last_name": "Doe",
+                "email": "postal-invalid@example.com",
+                "postal_code": postal_code,
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_create_member_accepts_valid_postal_code(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Jane",
+                "last_name": "Doe",
+                "email": "postal-valid@example.com",
+                "postal_code": "560001",
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 201
+        assert response.json()["postal_code"] == "560001"
+
+    async def test_list_members_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.get("/api/v1/members", headers=librarian_headers)
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data["items"], list)
         assert isinstance(data["total"], int)
 
-    async def test_get_member_endpoint(self, client: AsyncClient) -> None:
+    async def test_get_member_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         create_response = await client.post(
             "/api/v1/members",
             json={"first_name": "Test", "last_name": "User", "email": "test.get@example.com"},
+            headers=librarian_headers,
         )
         member_id = create_response.json()["member_id"]
 
-        response = await client.get(f"/api/v1/members/{member_id}")
+        response = await client.get(f"/api/v1/members/{member_id}", headers=librarian_headers)
         assert response.status_code == 200
         assert response.json()["email"] == "test.get@example.com"
 
-    async def test_get_member_not_found(self, client: AsyncClient) -> None:
-        response = await client.get(f"/api/v1/members/{uuid4()}")
+    async def test_get_member_not_found(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.get(f"/api/v1/members/{uuid4()}", headers=librarian_headers)
         assert response.status_code == 404
 
-    async def test_update_member_endpoint(self, client: AsyncClient) -> None:
+    async def test_update_member_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         create_response = await client.post(
             "/api/v1/members",
             json={"first_name": "Test", "last_name": "User", "email": "test.upd@example.com"},
+            headers=librarian_headers,
         )
         member_id = create_response.json()["member_id"]
 
         response = await client.put(
-            f"/api/v1/members/{member_id}", json={"membership_status": "BLOCKED"}
+            f"/api/v1/members/{member_id}",
+            json={"membership_status": "BLOCKED"},
+            headers=librarian_headers,
         )
         assert response.status_code == 200
         assert response.json()["membership_status"] == "BLOCKED"
 
-    async def test_delete_member_endpoint(self, client: AsyncClient) -> None:
+    async def test_suspend_member_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         create_response = await client.post(
             "/api/v1/members",
-            json={"first_name": "Test", "last_name": "User", "email": "test.del@example.com"},
+            json={"first_name": "Test", "last_name": "User", "email": "test.suspend@example.com"},
+            headers=librarian_headers,
         )
         member_id = create_response.json()["member_id"]
 
-        response = await client.delete(f"/api/v1/members/{member_id}")
+        response = await client.post(
+            f"/api/v1/members/{member_id}/suspend", headers=librarian_headers
+        )
+        assert response.status_code == 200
+        assert response.json()["membership_status"] == "BLOCKED"
+
+    async def test_reactivate_member_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Test",
+                "last_name": "User",
+                "email": "test.reactivate@example.com",
+            },
+            headers=librarian_headers,
+        )
+        member_id = create_response.json()["member_id"]
+        await client.post(f"/api/v1/members/{member_id}/suspend", headers=librarian_headers)
+
+        response = await client.post(
+            f"/api/v1/members/{member_id}/reactivate", headers=librarian_headers
+        )
+        assert response.status_code == 200
+        assert response.json()["membership_status"] == "ACTIVE"
+
+    async def test_suspended_member_cannot_borrow(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        """API-level pin of the pre-existing service rule (services/loan.py) that
+        a non-ACTIVE member cannot be issued a loan."""
+        member_response = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Blocked",
+                "last_name": "Borrower",
+                "email": "blocked.borrower@example.com",
+            },
+            headers=librarian_headers,
+        )
+        member_id = member_response.json()["member_id"]
+        await client.post(f"/api/v1/members/{member_id}/suspend", headers=librarian_headers)
+
+        book_response = await client.post(
+            "/api/v1/books",
+            json={"title": "Borrow Test Book", "author": "Author"},
+            headers=librarian_headers,
+        )
+        book_id = book_response.json()["book_id"]
+        copy_response = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "SUSPEND-TEST-001"},
+            headers=librarian_headers,
+        )
+        copy_id = copy_response.json()["copy_id"]
+
+        response = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": copy_id, "member_id": member_id},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 409
+
+    async def test_delete_member_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/members",
+            json={"first_name": "Test", "last_name": "User", "email": "test.del@example.com"},
+            headers=librarian_headers,
+        )
+        member_id = create_response.json()["member_id"]
+
+        response = await client.delete(f"/api/v1/members/{member_id}", headers=librarian_headers)
         assert response.status_code == 204
 
-        response = await client.get(f"/api/v1/members/{member_id}")
+        response = await client.get(f"/api/v1/members/{member_id}", headers=librarian_headers)
         assert response.status_code == 404
 
-    async def test_search_members_endpoint(self, client: AsyncClient) -> None:
+    async def test_search_members_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         await client.post(
             "/api/v1/members",
             json={
@@ -212,8 +380,9 @@ class TestMembersAPI:
                 "last_name": "Search",
                 "email": "zelda@example.com",
             },
+            headers=librarian_headers,
         )
-        response = await client.get("/api/v1/members/search?name=Zelda")
+        response = await client.get("/api/v1/members/search?name=Zelda", headers=librarian_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 1

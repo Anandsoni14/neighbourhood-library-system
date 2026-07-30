@@ -148,6 +148,29 @@ class MemberService:
         logger.info("member_updated", extra={"member_id": str(member_id)})
         return member
 
+    async def suspend_member(self, member_id: UUID) -> Member:
+        """Suspend a member (-> BLOCKED), blocking new loans immediately.
+
+        Idempotent, so a retried request behaves the same as the first one.
+        Enforcement is `LoanService.issue_loan`'s existing ACTIVE-only check —
+        this only flips the status that check reads.
+        """
+        member = await self.get_member(member_id)
+        member.membership_status = MembershipStatus.BLOCKED
+        self._session.add(member)
+        await self._session.flush()
+        logger.info("member_suspended", extra={"member_id": str(member_id)})
+        return member
+
+    async def reactivate_member(self, member_id: UUID) -> Member:
+        """Reactivate a member (-> ACTIVE) from BLOCKED or INACTIVE. Idempotent."""
+        member = await self.get_member(member_id)
+        member.membership_status = MembershipStatus.ACTIVE
+        self._session.add(member)
+        await self._session.flush()
+        logger.info("member_reactivated", extra={"member_id": str(member_id)})
+        return member
+
     async def delete_member(self, member_id: UUID) -> None:
         """Delete a member. Fails if the member has loan or transaction history."""
         member = await self.get_member(member_id)

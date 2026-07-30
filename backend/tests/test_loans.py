@@ -468,6 +468,50 @@ class TestLoanService:
         with pytest.raises(LoanNotFoundException):
             await loan_service.get_loan(uuid4())
 
+    async def test_issue_loan_on_archived_book_raises(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+    ) -> None:
+        copy = await _make_copy(book_service, copy_service)
+        await book_service.archive_book(copy.book_id)
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+
+        with pytest.raises(BookUnavailableException):
+            await loan_service.issue_loan(
+                copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+            )
+
+    async def test_return_loan_on_archived_book_still_works(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+    ) -> None:
+        """Archiving only blocks *new* loans; an outstanding one must still be
+        returnable so the copy doesn't get stuck BORROWED forever."""
+        copy = await _make_copy(book_service, copy_service)
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+        loan = await loan_service.issue_loan(
+            copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+        )
+        await book_service.archive_book(copy.book_id)
+
+        returned = await loan_service.return_loan(
+            loan_id=loan.loan_id,
+            return_condition=CopyCondition.GOOD,
+            received_by_staff_id=staff.staff_id,
+        )
+
+        assert returned.status == LoanStatus.RETURNED
+
 
 class TestLoansAPI:
     """Test Loans API endpoints."""
@@ -475,27 +519,10 @@ class TestLoansAPI:
     async def _setup_loan_prerequisites(
         self, client: AsyncClient, db: AsyncSession
     ) -> dict[str, Any]:
-        book_resp = await client.post(
-            "/api/v1/books", json={"title": "API Test Book", "author": "Author"}
-        )
-        book_id = book_resp.json()["book_id"]
-        copy_resp = await client.post(
-            "/api/v1/book-copies",
-            json={"book_id": book_id, "barcode": f"API-{uuid4()}"},
-        )
-        copy_id = copy_resp.json()["copy_id"]
-        member_resp = await client.post(
-            "/api/v1/members",
-            json={
-                "first_name": "API",
-                "last_name": "Member",
-                "email": f"{uuid4()}@example.com",
-            },
-        )
-        member_id = member_resp.json()["member_id"]
-
         # Staff creation is ADMIN-gated; bootstrap directly via the service
         # (bypassing HTTP/auth) rather than chicken-and-egging a token first.
+        # Every other resource here (books/members/book-copies) is behind
+        # get_current_staff, so this token is built first and reused below.
         staff = await StaffService(db).create_staff(
             employee_code=f"EMP-{uuid4().hex[:8]}",
             first_name="API",
@@ -505,6 +532,30 @@ class TestLoansAPI:
         )
         token = create_access_token(staff.staff_id, staff.role)
         headers = {"Authorization": f"Bearer {token}"}
+
+        book_resp = await client.post(
+            "/api/v1/books",
+            json={"title": "API Test Book", "author": "Author"},
+            headers=headers,
+        )
+        book_id = book_resp.json()["book_id"]
+        copy_resp = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": f"API-{uuid4()}"},
+            headers=headers,
+        )
+        copy_id = copy_resp.json()["copy_id"]
+        member_resp = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "API",
+                "last_name": "Member",
+                "email": f"{uuid4()}@example.com",
+            },
+            headers=headers,
+        )
+        member_id = member_resp.json()["member_id"]
+
         return {"copy_id": copy_id, "member_id": member_id, "headers": headers}
 
     async def test_issue_loan_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
@@ -534,7 +585,9 @@ class TestLoansAPI:
     ) -> None:
         ids = await self._setup_loan_prerequisites(client, db)
         await client.put(
-            f"/api/v1/members/{ids['member_id']}", json={"membership_status": "BLOCKED"}
+            f"/api/v1/members/{ids['member_id']}",
+            json={"membership_status": "BLOCKED"},
+            headers=ids["headers"],
         )
         response = await client.post(
             "/api/v1/loans",
@@ -559,6 +612,7 @@ class TestLoansAPI:
                 "last_name": "Member",
                 "email": f"{uuid4()}@example.com",
             },
+            headers=ids["headers"],
         )
         response = await client.post(
             "/api/v1/loans",
@@ -580,6 +634,21 @@ class TestLoansAPI:
             headers=ids["headers"],
         )
         assert response.status_code == 404
+
+    async def test_issue_loan_endpoint_archived_book_409(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        copy = await db.get(BookCopy, ids["copy_id"])
+        assert copy is not None
+        await BookService(db).archive_book(copy.book_id)
+
+        response = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+        assert response.status_code == 409
 
     async def test_return_loan_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
         ids = await self._setup_loan_prerequisites(client, db)

@@ -106,99 +106,185 @@ class TestBookCopyService:
         with pytest.raises(NotFoundError):
             await copy_service.get_copy(copy.copy_id)
 
+    async def test_create_copy_on_archived_book_raises_conflict(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        book = await book_service.create_book(title="Archived Book", author="Author")
+        await book_service.archive_book(book.book_id)
+        with pytest.raises(ConflictError):
+            await copy_service.create_copy(book_id=book.book_id, barcode="ARCHIVED-1")
+
 
 class TestBookCopiesAPI:
     """Test Book Copies API endpoints."""
 
-    async def test_create_book_copy_endpoint(self, client: AsyncClient) -> None:
+    async def test_create_book_copy_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         book_resp = await client.post(
-            "/api/v1/books", json={"title": "1984", "author": "George Orwell"}
+            "/api/v1/books",
+            json={"title": "1984", "author": "George Orwell"},
+            headers=librarian_headers,
         )
         book_id = book_resp.json()["book_id"]
 
         response = await client.post(
-            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-100"}
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "COPY-100"},
+            headers=librarian_headers,
         )
         assert response.status_code == 201
         data = response.json()
         assert data["barcode"] == "COPY-100"
         assert data["status"] == "AVAILABLE"
 
-    async def test_create_book_copy_book_not_found(self, client: AsyncClient) -> None:
+    async def test_create_book_copy_endpoint_no_token_401(self, client: AsyncClient) -> None:
         response = await client.post(
-            "/api/v1/book-copies", json={"book_id": str(uuid4()), "barcode": "COPY-404"}
+            "/api/v1/book-copies", json={"book_id": str(uuid4()), "barcode": "NO-TOKEN"}
+        )
+        assert response.status_code == 401
+
+    async def test_create_book_copy_book_not_found(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": str(uuid4()), "barcode": "COPY-404"},
+            headers=librarian_headers,
         )
         assert response.status_code == 404
 
-    async def test_list_book_copies_by_book(self, client: AsyncClient) -> None:
+    async def test_create_book_copy_on_archived_book_409(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         book_resp = await client.post(
-            "/api/v1/books", json={"title": "Brave New World", "author": "Huxley"}
+            "/api/v1/books",
+            json={"title": "Archived Endpoint Book", "author": "Author"},
+            headers=librarian_headers,
         )
         book_id = book_resp.json()["book_id"]
-        await client.post("/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-A"})
+        await client.post(f"/api/v1/books/{book_id}/archive", headers=librarian_headers)
 
-        response = await client.get(f"/api/v1/book-copies?book_id={book_id}")
-        assert response.status_code == 200
-        assert response.json()["total"] == 1
+        response = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "ARCHIVED-ENDPOINT-1"},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 409
 
-    async def test_list_book_copies_combines_filters_endpoint(self, client: AsyncClient) -> None:
-        """Regression: ?book_id=X&status=Y used to ignore status entirely."""
+    async def test_list_book_copies_by_book(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
         book_resp = await client.post(
-            "/api/v1/books", json={"title": "Combined Copies", "author": "Author"}
+            "/api/v1/books",
+            json={"title": "Brave New World", "author": "Huxley"},
+            headers=librarian_headers,
         )
         book_id = book_resp.json()["book_id"]
-        await client.post("/api/v1/book-copies", json={"book_id": book_id, "barcode": "CMB-1"})
-        borrowed = await client.post(
-            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "CMB-2"}
-        )
-        await client.put(
-            f"/api/v1/book-copies/{borrowed.json()['copy_id']}", json={"status": "BORROWED"}
+        await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "COPY-A"},
+            headers=librarian_headers,
         )
 
         response = await client.get(
-            "/api/v1/book-copies", params={"book_id": book_id, "status": "AVAILABLE"}
+            f"/api/v1/book-copies?book_id={book_id}", headers=librarian_headers
+        )
+        assert response.status_code == 200
+        assert response.json()["total"] == 1
+
+    async def test_list_book_copies_combines_filters_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        """Regression: ?book_id=X&status=Y used to ignore status entirely."""
+        book_resp = await client.post(
+            "/api/v1/books",
+            json={"title": "Combined Copies", "author": "Author"},
+            headers=librarian_headers,
+        )
+        book_id = book_resp.json()["book_id"]
+        await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "CMB-1"},
+            headers=librarian_headers,
+        )
+        borrowed = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "CMB-2"},
+            headers=librarian_headers,
+        )
+        await client.put(
+            f"/api/v1/book-copies/{borrowed.json()['copy_id']}",
+            json={"status": "BORROWED"},
+            headers=librarian_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/book-copies",
+            params={"book_id": book_id, "status": "AVAILABLE"},
+            headers=librarian_headers,
         )
 
         data = response.json()
         assert data["total"] == 1
         assert data["items"][0]["barcode"] == "CMB-1"
 
-    async def test_get_book_copy_endpoint(self, client: AsyncClient) -> None:
-        book_resp = await client.post("/api/v1/books", json={"title": "Book", "author": "Author"})
+    async def test_get_book_copy_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        book_resp = await client.post(
+            "/api/v1/books", json={"title": "Book", "author": "Author"}, headers=librarian_headers
+        )
         book_id = book_resp.json()["book_id"]
         copy_resp = await client.post(
-            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-B"}
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "COPY-B"},
+            headers=librarian_headers,
         )
         copy_id = copy_resp.json()["copy_id"]
 
-        response = await client.get(f"/api/v1/book-copies/{copy_id}")
+        response = await client.get(f"/api/v1/book-copies/{copy_id}", headers=librarian_headers)
         assert response.status_code == 200
         assert response.json()["barcode"] == "COPY-B"
 
-    async def test_update_book_copy_endpoint(self, client: AsyncClient) -> None:
-        book_resp = await client.post("/api/v1/books", json={"title": "Book", "author": "Author"})
+    async def test_update_book_copy_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        book_resp = await client.post(
+            "/api/v1/books", json={"title": "Book", "author": "Author"}, headers=librarian_headers
+        )
         book_id = book_resp.json()["book_id"]
         copy_resp = await client.post(
-            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-C"}
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "COPY-C"},
+            headers=librarian_headers,
         )
         copy_id = copy_resp.json()["copy_id"]
 
         response = await client.put(
-            f"/api/v1/book-copies/{copy_id}", json={"status": "MAINTENANCE"}
+            f"/api/v1/book-copies/{copy_id}",
+            json={"status": "MAINTENANCE"},
+            headers=librarian_headers,
         )
         assert response.status_code == 200
         assert response.json()["status"] == "MAINTENANCE"
 
-    async def test_delete_book_copy_endpoint(self, client: AsyncClient) -> None:
-        book_resp = await client.post("/api/v1/books", json={"title": "Book", "author": "Author"})
+    async def test_delete_book_copy_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        book_resp = await client.post(
+            "/api/v1/books", json={"title": "Book", "author": "Author"}, headers=librarian_headers
+        )
         book_id = book_resp.json()["book_id"]
         copy_resp = await client.post(
-            "/api/v1/book-copies", json={"book_id": book_id, "barcode": "COPY-D"}
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "COPY-D"},
+            headers=librarian_headers,
         )
         copy_id = copy_resp.json()["copy_id"]
 
-        response = await client.delete(f"/api/v1/book-copies/{copy_id}")
+        response = await client.delete(f"/api/v1/book-copies/{copy_id}", headers=librarian_headers)
         assert response.status_code == 204
 
-        response = await client.get(f"/api/v1/book-copies/{copy_id}")
+        response = await client.get(f"/api/v1/book-copies/{copy_id}", headers=librarian_headers)
         assert response.status_code == 404

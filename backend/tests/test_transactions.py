@@ -347,7 +347,7 @@ class TestTransactionService:
 class TestTransactionsAPI:
     """Test Transactions API endpoints."""
 
-    async def _make_member_via_api(self, client: AsyncClient) -> str:
+    async def _make_member_via_api(self, client: AsyncClient, headers: dict[str, str]) -> str:
         resp = await client.post(
             "/api/v1/members",
             json={
@@ -355,12 +355,15 @@ class TestTransactionsAPI:
                 "last_name": "Member",
                 "email": f"{uuid4()}@example.com",
             },
+            headers=headers,
         )
         member_id: str = resp.json()["member_id"]
         return member_id
 
-    async def test_create_transaction_endpoint(self, client: AsyncClient) -> None:
-        member_id = await self._make_member_via_api(client)
+    async def test_create_transaction_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
         response = await client.post(
             "/api/v1/transactions",
             json={
@@ -368,14 +371,13 @@ class TestTransactionsAPI:
                 "transaction_type": "LATE_FEE",
                 "amount": "5.00",
             },
+            headers=librarian_headers,
         )
         assert response.status_code == 201
         data = response.json()
         assert data["status"] == "PENDING"
 
-    async def test_create_transaction_endpoint_member_not_found_404(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_create_transaction_endpoint_no_token_401(self, client: AsyncClient) -> None:
         response = await client.post(
             "/api/v1/transactions",
             json={
@@ -384,74 +386,116 @@ class TestTransactionsAPI:
                 "amount": "5.00",
             },
         )
+        assert response.status_code == 401
+
+    async def test_create_transaction_endpoint_member_not_found_404(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/transactions",
+            json={
+                "member_id": str(uuid4()),
+                "transaction_type": "LATE_FEE",
+                "amount": "5.00",
+            },
+            headers=librarian_headers,
+        )
         assert response.status_code == 404
 
-    async def test_pay_transaction_endpoint(self, client: AsyncClient) -> None:
-        member_id = await self._make_member_via_api(client)
+    async def test_pay_transaction_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
         create_resp = await client.post(
             "/api/v1/transactions",
             json={"member_id": member_id, "transaction_type": "DAMAGE_FEE", "amount": "10.00"},
+            headers=librarian_headers,
         )
         transaction_id = create_resp.json()["transaction_id"]
 
         response = await client.post(
             f"/api/v1/transactions/{transaction_id}/pay",
             json={"payment_mode": "CARD", "payment_reference": "REF-1"},
+            headers=librarian_headers,
         )
         assert response.status_code == 200
         assert response.json()["status"] == "SUCCESS"
 
-    async def test_pay_transaction_endpoint_already_settled_409(self, client: AsyncClient) -> None:
-        member_id = await self._make_member_via_api(client)
+    async def test_pay_transaction_endpoint_already_settled_409(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
         create_resp = await client.post(
             "/api/v1/transactions",
             json={"member_id": member_id, "transaction_type": "DAMAGE_FEE", "amount": "10.00"},
+            headers=librarian_headers,
         )
         transaction_id = create_resp.json()["transaction_id"]
         await client.post(
-            f"/api/v1/transactions/{transaction_id}/pay", json={"payment_mode": "CARD"}
+            f"/api/v1/transactions/{transaction_id}/pay",
+            json={"payment_mode": "CARD"},
+            headers=librarian_headers,
         )
 
         response = await client.post(
-            f"/api/v1/transactions/{transaction_id}/pay", json={"payment_mode": "CASH"}
+            f"/api/v1/transactions/{transaction_id}/pay",
+            json={"payment_mode": "CASH"},
+            headers=librarian_headers,
         )
         assert response.status_code == 409
 
-    async def test_fail_transaction_endpoint(self, client: AsyncClient) -> None:
-        member_id = await self._make_member_via_api(client)
+    async def test_fail_transaction_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
         create_resp = await client.post(
             "/api/v1/transactions",
             json={"member_id": member_id, "transaction_type": "LATE_FEE", "amount": "2.00"},
+            headers=librarian_headers,
         )
         transaction_id = create_resp.json()["transaction_id"]
 
-        response = await client.post(f"/api/v1/transactions/{transaction_id}/fail", json={})
+        response = await client.post(
+            f"/api/v1/transactions/{transaction_id}/fail", json={}, headers=librarian_headers
+        )
         assert response.status_code == 200
         assert response.json()["status"] == "FAILED"
 
-    async def test_waive_transaction_endpoint(self, client: AsyncClient) -> None:
-        member_id = await self._make_member_via_api(client)
+    async def test_waive_transaction_endpoint(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
         create_resp = await client.post(
             "/api/v1/transactions",
             json={"member_id": member_id, "transaction_type": "LATE_FEE", "amount": "2.00"},
+            headers=librarian_headers,
         )
         transaction_id = create_resp.json()["transaction_id"]
 
-        response = await client.post(f"/api/v1/transactions/{transaction_id}/waive")
+        response = await client.post(
+            f"/api/v1/transactions/{transaction_id}/waive", headers=librarian_headers
+        )
         assert response.status_code == 200
         assert response.json()["status"] == "WAIVED"
 
-    async def test_get_transaction_endpoint_not_found_404(self, client: AsyncClient) -> None:
-        response = await client.get(f"/api/v1/transactions/{uuid4()}")
+    async def test_get_transaction_endpoint_not_found_404(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.get(f"/api/v1/transactions/{uuid4()}", headers=librarian_headers)
         assert response.status_code == 404
 
-    async def test_list_transactions_endpoint_by_member_filter(self, client: AsyncClient) -> None:
-        member_id = await self._make_member_via_api(client)
+    async def test_list_transactions_endpoint_by_member_filter(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
         await client.post(
             "/api/v1/transactions",
             json={"member_id": member_id, "transaction_type": "LATE_FEE", "amount": "2.00"},
+            headers=librarian_headers,
         )
 
-        response = await client.get(f"/api/v1/transactions?member_id={member_id}")
+        response = await client.get(
+            f"/api/v1/transactions?member_id={member_id}", headers=librarian_headers
+        )
         assert response.status_code == 200
         assert response.json()["total"] == 1

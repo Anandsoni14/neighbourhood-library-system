@@ -35,10 +35,13 @@ class BookCopyService:
         max_borrow_days: int | None = None,
         late_fee_per_day: Decimal | None = None,
     ) -> BookCopy:
-        """Create a new copy of a book. Book must exist and barcode must be unique."""
+        """Create a new copy of a book. Book must exist, not be archived, and
+        barcode must be unique."""
         book = await self._book_repository.get_by_id(book_id)
         if not book:
             raise NotFoundError(f"Book {book_id} not found")
+        if book.is_archived:
+            raise ConflictError(f"Book {book_id} is archived and cannot receive new copies")
 
         existing = await self.repository.get_by_barcode(barcode)
         if existing:

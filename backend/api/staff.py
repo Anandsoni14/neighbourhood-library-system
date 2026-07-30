@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff, require_role
 from api.pagination import Page, PaginationParams
+from api.validators import PhoneNumber
 from core.exceptions import AuthorizationException
 from core.pagination import SortDir
 from db.session import get_db
@@ -46,7 +47,7 @@ class StaffCreateRequest(BaseModel):
     last_name: str
     email: EmailStr
     password: str = Field(min_length=8)
-    phone_number: str | None = None
+    phone_number: PhoneNumber | None = None
     role: StaffRole | None = None
 
 
@@ -56,7 +57,7 @@ class StaffUpdateRequest(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     email: EmailStr | None = None
-    phone_number: str | None = None
+    phone_number: PhoneNumber | None = None
     role: StaffRole | None = None
     status: StaffStatus | None = None
 
@@ -164,6 +165,34 @@ async def change_password(
         raise AuthorizationException("You may only change your own password")
     service = StaffService(db)
     staff = await service.change_password(staff_id, req.new_password)
+    return StaffResponse.model_validate(staff)
+
+
+@router.post("/{staff_id}/deactivate", response_model=StaffResponse)
+async def deactivate_staff(
+    staff_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
+) -> StaffResponse:
+    """Deactivate a staff member. ADMIN only.
+
+    Refuses self-deactivation and deactivating the last active admin — see
+    StaffService.deactivate_staff for why those guards live in the service.
+    """
+    service = StaffService(db)
+    staff = await service.deactivate_staff(staff_id, acting_staff_id=current_staff.staff_id)
+    return StaffResponse.model_validate(staff)
+
+
+@router.post("/{staff_id}/activate", response_model=StaffResponse)
+async def activate_staff(
+    staff_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
+) -> StaffResponse:
+    """Reactivate a deactivated staff member. ADMIN only."""
+    service = StaffService(db)
+    staff = await service.activate_staff(staff_id)
     return StaffResponse.model_validate(staff)
 
 

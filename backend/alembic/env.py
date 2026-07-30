@@ -18,7 +18,14 @@ if config.config_file_name is not None:
 
 # The same postgresql+psycopg:// URL works for both the app's async engine
 # and this sync migration runner, so no separate migration-only driver is needed.
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+#
+# Only default to database_url if the caller hasn't already set one: alembic.ini's
+# sqlalchemy.url is blank, so plain `alembic upgrade head` from the CLI falls
+# through to this default as before. tests/conftest.py pre-sets test_database_url
+# on its own Config object before invoking this env, so that override survives
+# instead of being clobbered here.
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 target_metadata = Base.metadata
 

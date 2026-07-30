@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     ForeignKey,
     Index,
@@ -21,6 +22,7 @@ from models.enums import CopyCondition, CopyStatus
 from models.mixins import TimestampMixin
 
 if TYPE_CHECKING:
+    from models.category import Category
     from models.loan import Loan
 
 _copy_condition = PGENUM(CopyCondition, name="copy_condition", create_type=False)
@@ -33,6 +35,8 @@ class Book(Base, TimestampMixin):
         CheckConstraint("published_year BETWEEN 1400 AND 2100", name="book_published_year_check"),
         Index("idx_book_isbn", "isbn"),
         Index("idx_book_title", "title"),
+        Index("idx_book_category_id", "category_id"),
+        Index("idx_book_is_archived", "is_archived"),
     )
 
     book_id: Mapped[UUID] = mapped_column(
@@ -42,10 +46,26 @@ class Book(Base, TimestampMixin):
     author: Mapped[str] = mapped_column(String(160), nullable=False)
     publisher: Mapped[str | None] = mapped_column(String(160))
     isbn: Mapped[str | None] = mapped_column(String(20), unique=True)
-    category: Mapped[str | None] = mapped_column(String(80))
+    category_id: Mapped[UUID | None] = mapped_column(
+        PGUUID(as_uuid=True),
+        # Named explicitly: the metadata has no naming_convention, so an unnamed
+        # FK gets an implicit server-side name and the migration's downgrade
+        # drop_constraint() would have to guess it.
+        ForeignKey("category.category_id", ondelete="RESTRICT", name="fk_book_category_id"),
+    )
     description: Mapped[str | None] = mapped_column(Text)
     published_year: Mapped[int | None] = mapped_column(SmallInteger)
+    # Books are archived, never deleted — a catalogue keeps its history, and a
+    # book with loan history cannot be removed without destroying that record.
+    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
+    # lazy="selectin" deviates from this codebase's lazy="raise" convention, on
+    # purpose. BookResponse.model_validate() touches `category` on every read,
+    # so lazy="raise" would mean threading selectinload() through list_books,
+    # get_book, and the post-flush reads in create_book/update_book — four sites,
+    # each an unguarded InvalidRequestError in production if one is missed.
+    # Category is a small dimension table, so the extra SELECT is negligible.
+    category: Mapped["Category | None"] = relationship(back_populates="books", lazy="selectin")
     copies: Mapped[list["BookCopy"]] = relationship(back_populates="book", lazy="raise")
 
 

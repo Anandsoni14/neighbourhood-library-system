@@ -5,13 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
 from core.pagination import SortDir
 from db.session import get_db
-from models import Book
+from models import Book, Category
 from services.book import BookService
 
-router = APIRouter(prefix="/api/v1/books", tags=["books"])
+router = APIRouter(
+    prefix="/api/v1/books",
+    tags=["books"],
+    dependencies=[Depends(get_current_staff)],
+)
 
 
 class BookSortField(StrEnum):
@@ -31,9 +36,31 @@ class BookSortField(StrEnum):
 _SORT_COLUMNS = {
     BookSortField.TITLE: Book.title,
     BookSortField.AUTHOR: Book.author,
-    BookSortField.CATEGORY: Book.category,
+    # Sorts on the joined category table; BookService always applies the OUTER
+    # join, so books with no category still sort (as NULL) rather than vanish.
+    BookSortField.CATEGORY: Category.name,
     BookSortField.PUBLISHED_YEAR: Book.published_year,
     BookSortField.CREATED_AT: Book.created_at,
+}
+
+
+class BookArchiveFilter(StrEnum):
+    """Which slice of the catalogue a listing should return.
+
+    Tri-state rather than a boolean `include_archived`: that flag can only ever
+    express "active plus archived", never "archived only", so the archived view
+    the UI needs would require a second parameter later.
+    """
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    ALL = "all"
+
+
+_ARCHIVE_FILTERS: dict[BookArchiveFilter, bool | None] = {
+    BookArchiveFilter.ACTIVE: False,
+    BookArchiveFilter.ARCHIVED: True,
+    BookArchiveFilter.ALL: None,
 }
 
 
@@ -44,9 +71,18 @@ class BookRequest(BaseModel):
     author: str
     publisher: str | None = None
     isbn: str | None = None
-    category: str | None = None
+    category_id: UUID | None = None
     description: str | None = None
     published_year: int | None = None
+
+
+class CategoryRef(BaseModel):
+    """The category a book belongs to, embedded so a listing needs no second call."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    category_id: UUID
+    name: str
 
 
 class BookResponse(BaseModel):
@@ -59,9 +95,11 @@ class BookResponse(BaseModel):
     author: str
     publisher: str | None
     isbn: str | None
-    category: str | None
+    category_id: UUID | None
+    category: CategoryRef | None
     description: str | None
     published_year: int | None
+    is_archived: bool
 
 
 @router.post("", response_model=BookResponse, status_code=201)
@@ -73,7 +111,7 @@ async def create_book(req: BookRequest, db: AsyncSession = Depends(get_db)) -> B
         author=req.author,
         publisher=req.publisher,
         isbn=req.isbn,
-        category=req.category,
+        category_id=req.category_id,
         description=req.description,
         published_year=req.published_year,
     )
@@ -85,19 +123,25 @@ async def list_books(
     pagination: PaginationParams = Depends(),
     title: str | None = Query(None, description="Case-insensitive substring match."),
     author: str | None = Query(None, description="Case-insensitive substring match."),
-    category: str | None = Query(None, description="Case-insensitive substring match."),
+    category_id: UUID | None = Query(None),
     isbn: str | None = Query(None, description="Exact match."),
+    archived: BookArchiveFilter = Query(BookArchiveFilter.ACTIVE),
     sort_by: BookSortField = Query(BookSortField.TITLE),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
 ) -> Page[BookResponse]:
-    """List books. Every supplied filter is applied together."""
+    """List books. Every supplied filter is applied together.
+
+    Archived books are excluded by default; pass `archived=archived` for only
+    those, or `archived=all` for both.
+    """
     service = BookService(db)
     books, total = await service.list_books(
         title=title,
         author=author,
-        category=category,
+        category_id=category_id,
         isbn=isbn,
+        is_archived=_ARCHIVE_FILTERS[archived],
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
@@ -111,6 +155,7 @@ async def search_books(
     pagination: PaginationParams = Depends(),
     title: str | None = Query(None),
     isbn: str | None = Query(None),
+    archived: BookArchiveFilter = Query(BookArchiveFilter.ACTIVE),
     sort_by: BookSortField = Query(BookSortField.TITLE),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
@@ -128,6 +173,7 @@ async def search_books(
     books, total = await service.list_books(
         title=title,
         isbn=isbn,
+        is_archived=_ARCHIVE_FILTERS[archived],
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
@@ -156,15 +202,28 @@ async def update_book(
         author=req.author,
         publisher=req.publisher,
         isbn=req.isbn,
-        category=req.category,
+        category_id=req.category_id,
         description=req.description,
         published_year=req.published_year,
     )
     return BookResponse.model_validate(book)
 
 
-@router.delete("/{book_id}", status_code=204)
-async def delete_book(book_id: UUID, db: AsyncSession = Depends(get_db)) -> None:
-    """Delete a book."""
+# Deliberately no DELETE. A book with copies cannot be removed without
+# destroying the loan history attached to those copies; archiving is the
+# reversible equivalent the UI actually needs. FastAPI returns 405 for DELETE
+# on this path now, which is the correct signal that the operation is gone.
+@router.post("/{book_id}/archive", response_model=BookResponse)
+async def archive_book(book_id: UUID, db: AsyncSession = Depends(get_db)) -> BookResponse:
+    """Archive a book, hiding it from the default listing and blocking new loans."""
     service = BookService(db)
-    await service.delete_book(book_id)
+    book = await service.archive_book(book_id)
+    return BookResponse.model_validate(book)
+
+
+@router.post("/{book_id}/unarchive", response_model=BookResponse)
+async def unarchive_book(book_id: UUID, db: AsyncSession = Depends(get_db)) -> BookResponse:
+    """Restore a previously archived book."""
+    service = BookService(db)
+    book = await service.unarchive_book(book_id)
+    return BookResponse.model_validate(book)

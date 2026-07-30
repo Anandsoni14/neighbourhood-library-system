@@ -26,10 +26,17 @@ class AuthService:
         caller can't tell which one was wrong (avoids user enumeration).
         """
         staff = await self.repository.get_by_email(email)
-        if not staff or not verify_password(password, staff.password_hash):
+        # A distinct "account is inactive" message here would leak, to anyone who
+        # already knows the password, that they found a real (but disabled)
+        # account — the exact user-enumeration this generic message exists to
+        # prevent. INACTIVE is folded into the same rejection as unknown-email
+        # and wrong-password.
+        if (
+            not staff
+            or not verify_password(password, staff.password_hash)
+            or staff.status != StaffStatus.ACTIVE
+        ):
             raise AuthenticationException("Invalid email or password")
-        if staff.status != StaffStatus.ACTIVE:
-            raise AuthenticationException("Staff account is inactive")
 
         staff.last_login_at = datetime.now(UTC)
         self._session.add(staff)

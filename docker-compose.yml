@@ -10,6 +10,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Only runs against a fresh (empty) volume: creates library_test_db
+      # alongside POSTGRES_DB's library_db, so pytest has a database that
+      # never receives the backend's seeded sample data.
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d library_db"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   backend:
     build:
@@ -19,8 +28,19 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg://user:password@db:5432/library_db
+      TEST_DATABASE_URL: postgresql+psycopg://user:password@db:5432/library_test_db
+      # Set to "true" to populate library_db with a demo catalogue, staff,
+      # members and loans on startup (idempotent — safe to leave on across
+      # restarts). See backend/README.md for the seeded admin credentials.
+      SEED_SAMPLE_DATA: "true"
     depends_on:
-      - db
+      db:
+        # The previous `depends_on: - db` only waited for the container to
+        # start, not for Postgres to accept connections — harmless before,
+        # but the entrypoint now runs migrations on every startup, and a
+        # migration attempt against a not-yet-ready Postgres is a reliable
+        # cold-start failure rather than a rare race.
+        condition: service_healthy
 
   frontend:
     build:
