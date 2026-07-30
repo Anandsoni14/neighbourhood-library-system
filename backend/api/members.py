@@ -1,15 +1,37 @@
+from enum import StrEnum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.exceptions import ConflictError, NotFoundError
+from api.pagination import Page, PaginationParams
+from core.pagination import SortDir
 from db.session import get_db
+from models import Member
 from models.enums import MembershipStatus
 from services.member import MemberService
 
 router = APIRouter(prefix="/api/v1/members", tags=["members"])
+
+
+class MemberSortField(StrEnum):
+    """Columns a member listing may be sorted by."""
+
+    FIRST_NAME = "first_name"
+    LAST_NAME = "last_name"
+    EMAIL = "email"
+    MEMBERSHIP_STATUS = "membership_status"
+    CREATED_AT = "created_at"
+
+
+_SORT_COLUMNS = {
+    MemberSortField.FIRST_NAME: Member.first_name,
+    MemberSortField.LAST_NAME: Member.last_name,
+    MemberSortField.EMAIL: Member.email,
+    MemberSortField.MEMBERSHIP_STATUS: Member.membership_status,
+    MemberSortField.CREATED_AT: Member.created_at,
+}
 
 
 class MemberCreateRequest(BaseModel):
@@ -74,49 +96,66 @@ async def create_member(
 ) -> MemberResponse:
     """Create a new member."""
     service = MemberService(db)
-    try:
-        member = await service.create_member(**req.model_dump())
-        return MemberResponse.model_validate(member)
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    member = await service.create_member(**req.model_dump())
+    return MemberResponse.model_validate(member)
 
 
-@router.get("", response_model=list[MemberResponse])
+@router.get("", response_model=Page[MemberResponse])
 async def list_members(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    pagination: PaginationParams = Depends(),
     status: MembershipStatus | None = Query(None),
+    name: str | None = Query(None, description="Matches first or last name."),
+    email: str | None = Query(None, description="Case-insensitive substring match."),
+    sort_by: MemberSortField = Query(MemberSortField.LAST_NAME),
+    sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
-) -> list[MemberResponse]:
-    """List members with optional filtering by membership status."""
+) -> Page[MemberResponse]:
+    """List members. Every supplied filter is applied together."""
     service = MemberService(db)
-    if status is not None:
-        members = await service.list_members_by_status(status)
-    else:
-        members = await service.list_members(limit=limit, offset=skip)
-    return [MemberResponse.model_validate(m) for m in members]
+    members, total = await service.list_members(
+        status=status,
+        name=name,
+        email=email,
+        sort_by=_SORT_COLUMNS[sort_by],
+        sort_dir=sort_dir,
+        limit=pagination.limit,
+        offset=pagination.skip,
+    )
+    return Page.create([MemberResponse.model_validate(m) for m in members], total, pagination)
 
 
-@router.get("/search", response_model=list[MemberResponse])
+@router.get("/search", response_model=Page[MemberResponse])
 async def search_members(
     name: str = Query(..., min_length=1),
+    pagination: PaginationParams = Depends(),
+    status: MembershipStatus | None = Query(None),
+    sort_by: MemberSortField = Query(MemberSortField.LAST_NAME),
+    sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
-) -> list[MemberResponse]:
-    """Search members by first or last name."""
+) -> Page[MemberResponse]:
+    """Search members by first or last name.
+
+    Declared before /{member_id} so this static path isn't captured by the
+    member_id UUID path parameter.
+    """
     service = MemberService(db)
-    members = await service.search_members(name=name)
-    return [MemberResponse.model_validate(m) for m in members]
+    members, total = await service.list_members(
+        name=name,
+        status=status,
+        sort_by=_SORT_COLUMNS[sort_by],
+        sort_dir=sort_dir,
+        limit=pagination.limit,
+        offset=pagination.skip,
+    )
+    return Page.create([MemberResponse.model_validate(m) for m in members], total, pagination)
 
 
 @router.get("/{member_id}", response_model=MemberResponse)
 async def get_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> MemberResponse:
     """Fetch a member by ID."""
     service = MemberService(db)
-    try:
-        member = await service.get_member(member_id)
-        return MemberResponse.model_validate(member)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    member = await service.get_member(member_id)
+    return MemberResponse.model_validate(member)
 
 
 @router.put("/{member_id}", response_model=MemberResponse)
@@ -125,22 +164,12 @@ async def update_member(
 ) -> MemberResponse:
     """Update a member."""
     service = MemberService(db)
-    try:
-        member = await service.update_member(member_id, **req.model_dump(exclude_unset=True))
-        return MemberResponse.model_validate(member)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    member = await service.update_member(member_id, **req.model_dump(exclude_unset=True))
+    return MemberResponse.model_validate(member)
 
 
 @router.delete("/{member_id}", status_code=204)
 async def delete_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> None:
     """Delete a member."""
     service = MemberService(db)
-    try:
-        await service.delete_member(member_id)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    await service.delete_member(member_id)

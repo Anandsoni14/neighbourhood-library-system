@@ -2,10 +2,13 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import ColumnElement
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import ConflictError, NotFoundError
+from core.pagination import SortDir
 from models import Book
 from repositories.book import BookRepository
 
@@ -58,10 +61,41 @@ class BookService:
             raise NotFoundError(f"Book {book_id} not found")
         return book
 
-    async def list_books(self, limit: int = 100, offset: int = 0) -> list[Book]:
-        """List all books with pagination."""
-        all_books = await self.repository.list_all()
-        return list(all_books)[offset : offset + limit]
+    async def list_books(
+        self,
+        *,
+        title: str | None = None,
+        isbn: str | None = None,
+        category: str | None = None,
+        author: str | None = None,
+        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_dir: SortDir = SortDir.ASC,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[Book], int]:
+        """List books matching every supplied filter, returning the page and total.
+
+        Text filters are case-insensitive substring matches; ISBN is exact,
+        since it is a unique identifier rather than a search term.
+        """
+        filters: list[ColumnElement[bool]] = []
+        if title:
+            filters.append(Book.title.ilike(f"%{title}%"))
+        if author:
+            filters.append(Book.author.ilike(f"%{author}%"))
+        if category:
+            filters.append(Book.category.ilike(f"%{category}%"))
+        if isbn:
+            filters.append(Book.isbn == isbn)
+
+        books, total = await self.repository.list_paginated(
+            filters=filters,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+            limit=limit,
+            offset=offset,
+        )
+        return list(books), total
 
     async def update_book(self, book_id: UUID, **fields: Any) -> Book:
         """Update book fields. ISBN must remain unique."""
@@ -90,14 +124,3 @@ class BookService:
         except IntegrityError as e:
             raise ConflictError(f"Cannot delete book {book_id}: it still has copies") from e
         logger.info("book_deleted", extra={"book_id": str(book_id)})
-
-    async def search_books(self, title: str | None = None, isbn: str | None = None) -> list[Book]:
-        """Search books by title and/or ISBN."""
-        if isbn:
-            book = await self.repository.search_by_isbn(isbn)
-            return [book] if book else []
-
-        if title:
-            return list(await self.repository.search_by_title(title))
-
-        return list(await self.repository.list_all())

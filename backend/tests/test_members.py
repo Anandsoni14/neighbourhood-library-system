@@ -61,17 +61,49 @@ class TestMemberService:
     async def test_list_members(self, member_service: MemberService) -> None:
         await member_service.create_member(first_name="A", last_name="B", email="a@example.com")
         await member_service.create_member(first_name="C", last_name="D", email="c@example.com")
-        members = await member_service.list_members()
+        members, total = await member_service.list_members()
         assert len(members) >= 2
+        assert total >= 2
 
     async def test_list_members_by_status(self, member_service: MemberService) -> None:
         member = await member_service.create_member(
             first_name="A", last_name="B", email="status@example.com"
         )
         await member_service.update_member(member.member_id, membership_status="BLOCKED")
-        blocked = await member_service.list_members_by_status(MembershipStatus.BLOCKED)
-        assert len(blocked) == 1
+        blocked, total = await member_service.list_members(status=MembershipStatus.BLOCKED)
+        assert total == 1
         assert blocked[0].member_id == member.member_id
+
+    async def test_list_members_combines_status_and_name(
+        self, member_service: MemberService
+    ) -> None:
+        """Status and name narrow together rather than one overriding the other."""
+        blocked = await member_service.create_member(
+            first_name="Zoe", last_name="Blocked", email="zoe.blocked@example.com"
+        )
+        await member_service.update_member(blocked.member_id, membership_status="BLOCKED")
+        await member_service.create_member(
+            first_name="Zoe", last_name="Active", email="zoe.active@example.com"
+        )
+
+        results, total = await member_service.list_members(
+            status=MembershipStatus.BLOCKED, name="Zoe"
+        )
+
+        assert total == 1
+        assert results[0].member_id == blocked.member_id
+
+    async def test_filtered_list_still_paginates(self, member_service: MemberService) -> None:
+        """A filtered query honours limit/offset and reports the filtered total."""
+        for index in range(4):
+            await member_service.create_member(
+                first_name="Paged", last_name=f"Member{index}", email=f"paged{index}@example.com"
+            )
+
+        page, total = await member_service.list_members(name="Paged", limit=3, offset=0)
+
+        assert total == 4
+        assert len(page) == 3
 
     async def test_update_member(self, member_service: MemberService) -> None:
         member = await member_service.create_member(
@@ -95,8 +127,8 @@ class TestMemberService:
         await member_service.create_member(
             first_name="Bob", last_name="Builder", email="bob@example.com"
         )
-        results = await member_service.search_members(name="Alice")
-        assert len(results) == 1
+        results, total = await member_service.list_members(name="Alice")
+        assert total == 1
         assert results[0].first_name == "Alice"
 
 
@@ -127,7 +159,9 @@ class TestMembersAPI:
     async def test_list_members_endpoint(self, client: AsyncClient) -> None:
         response = await client.get("/api/v1/members")
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        data = response.json()
+        assert isinstance(data["items"], list)
+        assert isinstance(data["total"], int)
 
     async def test_get_member_endpoint(self, client: AsyncClient) -> None:
         create_response = await client.post(
@@ -182,5 +216,5 @@ class TestMembersAPI:
         response = await client.get("/api/v1/members/search?name=Zelda")
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 1
-        assert data[0]["first_name"] == "Zelda"
+        assert data["total"] == 1
+        assert data["items"][0]["first_name"] == "Zelda"

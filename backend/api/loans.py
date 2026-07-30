@@ -1,19 +1,40 @@
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
-from core.exceptions import ConflictError, NotFoundError
+from api.pagination import Page, PaginationParams
+from core.pagination import SortDir
 from db.session import get_db
-from models import Staff
+from models import Loan, Staff
 from models.enums import CopyCondition, LoanStatus
 from services.loan import LoanService
 
 router = APIRouter(prefix="/api/v1/loans", tags=["loans"])
+
+
+class LoanSortField(StrEnum):
+    """Columns a loan listing may be sorted by."""
+
+    BORROWED_AT = "borrowed_at"
+    DUE_AT = "due_at"
+    RETURNED_AT = "returned_at"
+    STATUS = "status"
+    CALCULATED_FINE = "calculated_fine"
+
+
+_SORT_COLUMNS = {
+    LoanSortField.BORROWED_AT: Loan.borrowed_at,
+    LoanSortField.DUE_AT: Loan.due_at,
+    LoanSortField.RETURNED_AT: Loan.returned_at,
+    LoanSortField.STATUS: Loan.status,
+    LoanSortField.CALCULATED_FINE: Loan.calculated_fine,
+}
 
 
 class LoanIssueRequest(BaseModel):
@@ -74,18 +95,13 @@ async def issue_loan(
 ) -> LoanResponse:
     """Issue a loan (borrow a book copy)."""
     service = LoanService(db)
-    try:
-        loan = await service.issue_loan(
-            copy_id=req.copy_id,
-            member_id=req.member_id,
-            issued_by_staff_id=current_staff.staff_id,
-            remarks=req.remarks,
-        )
-        return LoanResponse.model_validate(loan)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    loan = await service.issue_loan(
+        copy_id=req.copy_id,
+        member_id=req.member_id,
+        issued_by_staff_id=current_staff.staff_id,
+        remarks=req.remarks,
+    )
+    return LoanResponse.model_validate(loan)
 
 
 @router.post("/{loan_id}/return", response_model=LoanResponse)
@@ -97,49 +113,62 @@ async def return_loan(
 ) -> LoanResponse:
     """Return a loan (check in a borrowed copy)."""
     service = LoanService(db)
-    try:
-        loan = await service.return_loan(
-            loan_id=loan_id,
-            return_condition=req.return_condition,
-            received_by_staff_id=current_staff.staff_id,
-            remarks=req.remarks,
-        )
-        return LoanResponse.model_validate(loan)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    loan = await service.return_loan(
+        loan_id=loan_id,
+        return_condition=req.return_condition,
+        received_by_staff_id=current_staff.staff_id,
+        remarks=req.remarks,
+    )
+    return LoanResponse.model_validate(loan)
 
 
-@router.get("", response_model=list[LoanResponse])
+@router.get("", response_model=Page[LoanResponse])
 async def list_loans(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    pagination: PaginationParams = Depends(),
     member_id: UUID | None = Query(None),
+    copy_id: UUID | None = Query(None),
     status: LoanStatus | None = Query(None),
+    sort_by: LoanSortField = Query(LoanSortField.BORROWED_AT),
+    sort_dir: SortDir = Query(SortDir.DESC),
     db: AsyncSession = Depends(get_db),
-) -> list[LoanResponse]:
-    """List loans with optional filtering by member or status."""
+) -> Page[LoanResponse]:
+    """List loans. Every supplied filter is applied together.
+
+    Defaults to newest first, which is what a circulation desk wants to see.
+    """
     service = LoanService(db)
-    if member_id is not None:
-        loans = await service.list_loans_by_member(member_id)
-    elif status is not None:
-        loans = await service.list_loans_by_status(status)
-    else:
-        loans = await service.list_loans(limit=limit, offset=skip)
-    return [LoanResponse.model_validate(loan) for loan in loans]
+    loans, total = await service.list_loans(
+        member_id=member_id,
+        copy_id=copy_id,
+        status=status,
+        sort_by=_SORT_COLUMNS[sort_by],
+        sort_dir=sort_dir,
+        limit=pagination.limit,
+        offset=pagination.skip,
+    )
+    return Page.create([LoanResponse.model_validate(loan) for loan in loans], total, pagination)
 
 
-@router.get("/overdue", response_model=list[OverdueLoanResponse])
-async def list_overdue_loans(db: AsyncSession = Depends(get_db)) -> list[OverdueLoanResponse]:
+@router.get("/overdue", response_model=Page[OverdueLoanResponse])
+async def list_overdue_loans(
+    pagination: PaginationParams = Depends(),
+    sort_by: LoanSortField = Query(LoanSortField.DUE_AT),
+    sort_dir: SortDir = Query(SortDir.ASC),
+    db: AsyncSession = Depends(get_db),
+) -> Page[OverdueLoanResponse]:
     """List ACTIVE loans past due, with each one's overdue day count and estimated fine.
 
     Declared before /{loan_id} so this static path isn't swallowed by the
-    loan_id UUID path parameter.
+    loan_id UUID path parameter. Defaults to most-overdue first.
     """
     service = LoanService(db)
-    overdue = await service.get_overdue_loans()
-    return [
+    overdue, total = await service.get_overdue_loans(
+        sort_by=_SORT_COLUMNS[sort_by],
+        sort_dir=sort_dir,
+        limit=pagination.limit,
+        offset=pagination.skip,
+    )
+    items = [
         OverdueLoanResponse(
             **LoanResponse.model_validate(entry.loan).model_dump(),
             days_overdue=entry.days_overdue,
@@ -147,14 +176,12 @@ async def list_overdue_loans(db: AsyncSession = Depends(get_db)) -> list[Overdue
         )
         for entry in overdue
     ]
+    return Page.create(items, total, pagination)
 
 
 @router.get("/{loan_id}", response_model=LoanResponse)
 async def get_loan(loan_id: UUID, db: AsyncSession = Depends(get_db)) -> LoanResponse:
     """Fetch a loan by ID."""
     service = LoanService(db)
-    try:
-        loan = await service.get_loan(loan_id)
-        return LoanResponse.model_validate(loan)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    loan = await service.get_loan(loan_id)
+    return LoanResponse.model_validate(loan)

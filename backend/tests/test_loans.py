@@ -404,7 +404,8 @@ class TestLoanService:
             copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
         )
 
-        results = await loan_service.list_loans_by_member(member.member_id)
+        results, total = await loan_service.list_loans(member_id=member.member_id)
+        assert total == 1
         assert len(results) == 1
 
     async def test_list_loans_by_status(
@@ -422,8 +423,46 @@ class TestLoanService:
             copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
         )
 
-        results = await loan_service.list_loans_by_status(LoanStatus.ACTIVE)
+        results, total = await loan_service.list_loans(status=LoanStatus.ACTIVE)
+        assert total == 1
         assert len(results) == 1
+
+    async def test_list_loans_combines_member_and_status(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+    ) -> None:
+        """Regression: member_id and status used to be mutually exclusive."""
+        staff = await _make_staff(staff_service)
+        member = await _make_member(member_service)
+        returned_copy = await _make_copy(book_service, copy_service)
+        active_copy = await _make_copy(book_service, copy_service)
+
+        returned_loan = await loan_service.issue_loan(
+            copy_id=returned_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+        await loan_service.return_loan(
+            loan_id=returned_loan.loan_id,
+            return_condition=CopyCondition.GOOD,
+            received_by_staff_id=staff.staff_id,
+        )
+        active_loan = await loan_service.issue_loan(
+            copy_id=active_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+
+        results, total = await loan_service.list_loans(
+            member_id=member.member_id, status=LoanStatus.ACTIVE
+        )
+
+        assert total == 1
+        assert results[0].loan_id == active_loan.loan_id
 
     async def test_get_loan_not_found_raises(self, loan_service: LoanService) -> None:
         with pytest.raises(LoanNotFoundException):
@@ -605,7 +644,7 @@ class TestLoansAPI:
 
         response = await client.get(f"/api/v1/loans?member_id={ids['member_id']}")
         assert response.status_code == 200
-        assert len(response.json()) == 1
+        assert response.json()["total"] == 1
 
     async def test_list_loans_endpoint_by_status_filter(
         self, client: AsyncClient, db: AsyncSession
@@ -619,7 +658,7 @@ class TestLoansAPI:
 
         response = await client.get("/api/v1/loans?status=ACTIVE")
         assert response.status_code == 200
-        assert len(response.json()) >= 1
+        assert response.json()["total"] >= 1
 
     async def test_get_loan_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
         ids = await self._setup_loan_prerequisites(client, db)
@@ -655,7 +694,7 @@ class TestLoansAPI:
         response = await client.get("/api/v1/loans/overdue")
         assert response.status_code == 200
         data = response.json()
-        matching = [entry for entry in data if entry["loan_id"] == loan_id]
+        matching = [entry for entry in data["items"] if entry["loan_id"] == loan_id]
         assert len(matching) == 1
         assert matching[0]["days_overdue"] == 3
         assert Decimal(matching[0]["estimated_fine"]) == Decimal("15.00")
@@ -673,4 +712,4 @@ class TestLoansAPI:
 
         response = await client.get("/api/v1/loans/overdue")
         assert response.status_code == 200
-        assert loan_id not in [entry["loan_id"] for entry in response.json()]
+        assert loan_id not in [entry["loan_id"] for entry in response.json()["items"]]

@@ -1,17 +1,37 @@
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.exceptions import ConflictError, NotFoundError
+from api.pagination import Page, PaginationParams
+from core.pagination import SortDir
 from db.session import get_db
+from models import Transaction
 from models.enums import PaymentMode, TransactionStatus, TransactionType
 from services.transaction import TransactionService
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
+
+
+class TransactionSortField(StrEnum):
+    """Columns a transaction listing may be sorted by."""
+
+    CREATED_AT = "created_at"
+    AMOUNT = "amount"
+    STATUS = "status"
+    TRANSACTION_TYPE = "transaction_type"
+
+
+_SORT_COLUMNS = {
+    TransactionSortField.CREATED_AT: Transaction.created_at,
+    TransactionSortField.AMOUNT: Transaction.amount,
+    TransactionSortField.STATUS: Transaction.status,
+    TransactionSortField.TRANSACTION_TYPE: Transaction.transaction_type,
+}
 
 
 class TransactionCreateRequest(BaseModel):
@@ -60,41 +80,41 @@ async def create_transaction(
 ) -> TransactionResponse:
     """Record a new fee or waiver against a member's ledger."""
     service = TransactionService(db)
-    try:
-        transaction = await service.create_transaction(
-            member_id=req.member_id,
-            transaction_type=req.transaction_type,
-            amount=req.amount,
-            loan_id=req.loan_id,
-            payment_reference=req.payment_reference,
-        )
-        return TransactionResponse.model_validate(transaction)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    transaction = await service.create_transaction(
+        member_id=req.member_id,
+        transaction_type=req.transaction_type,
+        amount=req.amount,
+        loan_id=req.loan_id,
+        payment_reference=req.payment_reference,
+    )
+    return TransactionResponse.model_validate(transaction)
 
 
-@router.get("", response_model=list[TransactionResponse])
+@router.get("", response_model=Page[TransactionResponse])
 async def list_transactions(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
+    pagination: PaginationParams = Depends(),
     member_id: UUID | None = Query(None),
     loan_id: UUID | None = Query(None),
     status: TransactionStatus | None = Query(None),
+    transaction_type: TransactionType | None = Query(None),
+    sort_by: TransactionSortField = Query(TransactionSortField.CREATED_AT),
+    sort_dir: SortDir = Query(SortDir.DESC),
     db: AsyncSession = Depends(get_db),
-) -> list[TransactionResponse]:
-    """List transactions with optional filtering by member, loan, or status."""
+) -> Page[TransactionResponse]:
+    """List transactions. Every supplied filter is applied together."""
     service = TransactionService(db)
-    if member_id is not None:
-        transactions = await service.list_transactions_by_member(member_id)
-    elif loan_id is not None:
-        transactions = await service.list_transactions_by_loan(loan_id)
-    elif status is not None:
-        transactions = await service.list_transactions_by_status(status)
-    else:
-        transactions = await service.list_transactions(limit=limit, offset=skip)
-    return [TransactionResponse.model_validate(t) for t in transactions]
+    transactions, total = await service.list_transactions(
+        member_id=member_id,
+        loan_id=loan_id,
+        status=status,
+        transaction_type=transaction_type,
+        sort_by=_SORT_COLUMNS[sort_by],
+        sort_dir=sort_dir,
+        limit=pagination.limit,
+        offset=pagination.skip,
+    )
+    items = [TransactionResponse.model_validate(t) for t in transactions]
+    return Page.create(items, total, pagination)
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
@@ -103,11 +123,8 @@ async def get_transaction(
 ) -> TransactionResponse:
     """Fetch a transaction by ID."""
     service = TransactionService(db)
-    try:
-        transaction = await service.get_transaction(transaction_id)
-        return TransactionResponse.model_validate(transaction)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    transaction = await service.get_transaction(transaction_id)
+    return TransactionResponse.model_validate(transaction)
 
 
 @router.post("/{transaction_id}/pay", response_model=TransactionResponse)
@@ -116,17 +133,12 @@ async def pay_transaction(
 ) -> TransactionResponse:
     """Record a successful payment against a PENDING transaction."""
     service = TransactionService(db)
-    try:
-        transaction = await service.record_payment(
-            transaction_id=transaction_id,
-            payment_mode=req.payment_mode,
-            payment_reference=req.payment_reference,
-        )
-        return TransactionResponse.model_validate(transaction)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    transaction = await service.record_payment(
+        transaction_id=transaction_id,
+        payment_mode=req.payment_mode,
+        payment_reference=req.payment_reference,
+    )
+    return TransactionResponse.model_validate(transaction)
 
 
 @router.post("/{transaction_id}/fail", response_model=TransactionResponse)
@@ -135,17 +147,12 @@ async def fail_transaction(
 ) -> TransactionResponse:
     """Mark a PENDING transaction's payment attempt as failed."""
     service = TransactionService(db)
-    try:
-        transaction = await service.mark_failed(
-            transaction_id=transaction_id,
-            payment_mode=req.payment_mode,
-            payment_reference=req.payment_reference,
-        )
-        return TransactionResponse.model_validate(transaction)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    transaction = await service.mark_failed(
+        transaction_id=transaction_id,
+        payment_mode=req.payment_mode,
+        payment_reference=req.payment_reference,
+    )
+    return TransactionResponse.model_validate(transaction)
 
 
 @router.post("/{transaction_id}/waive", response_model=TransactionResponse)
@@ -154,10 +161,5 @@ async def waive_transaction(
 ) -> TransactionResponse:
     """Waive a PENDING fee, forgiving the amount owed."""
     service = TransactionService(db)
-    try:
-        transaction = await service.waive_transaction(transaction_id)
-        return TransactionResponse.model_validate(transaction)
-    except NotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    except ConflictError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
+    transaction = await service.waive_transaction(transaction_id)
+    return TransactionResponse.model_validate(transaction)
