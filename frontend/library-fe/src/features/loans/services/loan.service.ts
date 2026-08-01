@@ -20,8 +20,8 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const loanService = {
-  async list(params: ListLoansParams): Promise<Page<Loan>> {
-    const { data } = await httpClient.get<Page<Loan>>(ENDPOINTS.loans.list, {
+  list(params: ListLoansParams): Promise<Page<Loan>> {
+    return httpClient.get<Page<Loan>>(ENDPOINTS.loans.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -32,11 +32,10 @@ export const loanService = {
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async overdue(params: ListOverdueLoansParams): Promise<Page<OverdueLoan>> {
-    const { data } = await httpClient.get<Page<OverdueLoan>>(ENDPOINTS.loans.overdue, {
+  overdue(params: ListOverdueLoansParams): Promise<Page<OverdueLoan>> {
+    return httpClient.get<Page<OverdueLoan>>(ENDPOINTS.loans.overdue, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -44,21 +43,17 @@ export const loanService = {
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async get(loanId: string): Promise<Loan> {
-    const { data } = await httpClient.get<Loan>(ENDPOINTS.loans.byId(loanId));
-    return data;
+  get(loanId: string): Promise<Loan> {
+    return httpClient.get<Loan>(ENDPOINTS.loans.byId(loanId));
   },
 
-  async issue(payload: LoanIssueRequest): Promise<Loan> {
-    const { data } = await httpClient.post<Loan>(ENDPOINTS.loans.list, payload);
-    return data;
+  issue(payload: LoanIssueRequest): Promise<Loan> {
+    return httpClient.post<Loan>(ENDPOINTS.loans.list, payload);
   },
 
-  async returnLoan(loanId: string, payload: LoanReturnRequest): Promise<Loan> {
-    const { data } = await httpClient.post<Loan>(ENDPOINTS.loans.return(loanId), payload);
-    return data;
+  returnLoan(loanId: string, payload: LoanReturnRequest): Promise<Loan> {
+    return httpClient.post<Loan>(ENDPOINTS.loans.return(loanId), payload);
   },
 };

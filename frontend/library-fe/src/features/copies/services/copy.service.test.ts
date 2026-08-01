@@ -1,20 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { CopyCondition, CopyStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
 
 import { copyService } from './copy.service';
 import { BookCopySortField } from '../types/copy.types';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    },
+  };
+});
 
 const copy = {
   copy_id: '1',
@@ -29,9 +34,7 @@ const copy = {
 
 describe('copyService', () => {
   it('lists copies, omitting blank filters and forwarding sort/pagination', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({
-      data: { items: [copy], total: 1, skip: 0, limit: 25 },
-    });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [copy], total: 1, skip: 0, limit: 25 });
 
     const result = await copyService.list({
       skip: 0,
@@ -58,7 +61,7 @@ describe('copyService', () => {
   });
 
   it('fetches a single copy by id', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ data: copy });
+    vi.mocked(httpClient.get).mockResolvedValue(copy);
 
     const result = await copyService.get('1');
 
@@ -67,7 +70,7 @@ describe('copyService', () => {
   });
 
   it('creates a copy', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: copy });
+    vi.mocked(httpClient.post).mockResolvedValue(copy);
 
     const payload = { book_id: 'b1', barcode: 'BC-001' };
     const result = await copyService.create(payload);
@@ -77,7 +80,7 @@ describe('copyService', () => {
   });
 
   it('updates a copy', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue({ data: copy });
+    vi.mocked(httpClient.put).mockResolvedValue(copy);
 
     const payload = { barcode: 'BC-002' };
     const result = await copyService.update('1', payload);
@@ -87,7 +90,7 @@ describe('copyService', () => {
   });
 
   it('deletes a copy', async () => {
-    vi.mocked(httpClient.delete).mockResolvedValue({ data: undefined });
+    vi.mocked(httpClient.delete).mockResolvedValue(undefined);
 
     await copyService.remove('1');
 

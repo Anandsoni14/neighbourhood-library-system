@@ -46,8 +46,7 @@ const adminOnlyNavItems: NavItem[] = [
 export function Sidebar() {
   const location = useLocation();
   const { staff } = useAuth();
-  const items =
-    staff?.role === StaffRole.ADMIN ? [...navItems, ...adminOnlyNavItems] : navItems;
+  const items = staff?.role === StaffRole.ADMIN ? [...navItems, ...adminOnlyNavItems] : navItems;
 
   return (
     <Drawer

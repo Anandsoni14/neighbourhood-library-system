@@ -1,6 +1,6 @@
 import { combineSlices, configureStore } from '@reduxjs/toolkit';
 
-import { attachAuthInterceptors, httpClient } from '@/services/httpClient';
+import { attachAuthInterceptors } from '@/services/httpClient';
 
 import authReducer, { logout } from './slices/authSlice';
 import booksReducer from './slices/booksSlice';
@@ -40,7 +40,7 @@ export type AppDispatch = AppStore['dispatch'];
 
 export const store = setupStore();
 
-attachAuthInterceptors(httpClient, {
+attachAuthInterceptors({
   getToken: () => store.getState().auth.token,
   onUnauthorized: () => store.dispatch(logout()),
 });

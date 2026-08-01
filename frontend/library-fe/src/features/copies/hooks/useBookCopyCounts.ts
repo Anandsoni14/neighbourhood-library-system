@@ -17,10 +17,7 @@ interface CopyCounts {
  * Each book costs two `limit: 1` list calls (total count, available count) —
  * cheap since only `total` from the response envelope is read.
  */
-export function useBookCopyCounts(
-  bookIds: string[],
-  reloadToken = 0,
-): Record<string, CopyCounts> {
+export function useBookCopyCounts(bookIds: string[], reloadToken = 0): Record<string, CopyCounts> {
   const [counts, setCounts] = useState<Record<string, CopyCounts>>({});
 
   const idsKey = [...new Set(bookIds)].sort().join(',');

@@ -3,15 +3,20 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { copyService } from '@/features/copies/services/copy.service';
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { render, screen, waitFor } from '@/tests/test-utils';
 import { CopyCondition, CopyStatus } from '@/types/api';
 
 import { IssueLoanDialog } from './IssueLoanDialog';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
-  attachAuthInterceptors: vi.fn(),
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+    attachAuthInterceptors: vi.fn(),
+  };
+});
 
 vi.mock('@/features/copies/services/copy.service', () => ({
   copyService: { list: vi.fn() },
@@ -61,12 +66,12 @@ describe('IssueLoanDialog', () => {
     const user = userEvent.setup();
     vi.mocked(httpClient.get).mockImplementation((url: string) => {
       if (url === '/books') {
-        return Promise.resolve({ data: { items: [book], total: 1, skip: 0, limit: 25 } });
+        return Promise.resolve({ items: [book], total: 1, skip: 0, limit: 25 });
       }
       if (url === '/members') {
-        return Promise.resolve({ data: { items: [member], total: 1, skip: 0, limit: 25 } });
+        return Promise.resolve({ items: [member], total: 1, skip: 0, limit: 25 });
       }
-      return Promise.resolve({ data: { items: [], total: 0, skip: 0, limit: 25 } });
+      return Promise.resolve({ items: [], total: 0, skip: 0, limit: 25 });
     });
     vi.mocked(copyService.list).mockResolvedValue({ items: [copy], total: 1, skip: 0, limit: 50 });
 
@@ -118,9 +123,7 @@ describe('IssueLoanDialog', () => {
   });
 
   it('blocks submission until a copy and member are selected', () => {
-    vi.mocked(httpClient.get).mockResolvedValue({
-      data: { items: [], total: 0, skip: 0, limit: 25 },
-    });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [], total: 0, skip: 0, limit: 25 });
 
     const onSubmit = vi.fn();
     render(

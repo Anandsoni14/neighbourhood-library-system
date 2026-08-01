@@ -5,14 +5,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setupStore } from '@/redux/store';
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { CopyCondition, LoanStatus } from '@/types/api';
 
 import { useDashboard } from './useDashboard';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
-  attachAuthInterceptors: vi.fn(),
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+    attachAuthInterceptors: vi.fn(),
+  };
+});
 
 const overdueLoan = {
   loan_id: '1',
@@ -48,9 +53,9 @@ describe('useDashboard', () => {
   it('fetches counts and overdue loans', async () => {
     vi.mocked(httpClient.get).mockImplementation((url: string) => {
       if (url === '/loans/overdue') {
-        return Promise.resolve({ data: { items: [overdueLoan], total: 1, skip: 0, limit: 25 } });
+        return Promise.resolve({ items: [overdueLoan], total: 1, skip: 0, limit: 25 });
       }
-      return Promise.resolve({ data: { items: [], total: 3, skip: 0, limit: 1 } });
+      return Promise.resolve({ items: [], total: 3, skip: 0, limit: 1 });
     });
 
     const store = setupStore();

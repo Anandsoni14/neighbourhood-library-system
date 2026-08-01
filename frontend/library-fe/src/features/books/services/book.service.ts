@@ -13,8 +13,8 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const bookService = {
-  async list(params: ListBooksParams): Promise<Page<Book>> {
-    const { data } = await httpClient.get<Page<Book>>(ENDPOINTS.books.list, {
+  list(params: ListBooksParams): Promise<Page<Book>> {
+    return httpClient.get<Page<Book>>(ENDPOINTS.books.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -27,31 +27,25 @@ export const bookService = {
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async get(bookId: string): Promise<Book> {
-    const { data } = await httpClient.get<Book>(ENDPOINTS.books.byId(bookId));
-    return data;
+  get(bookId: string): Promise<Book> {
+    return httpClient.get<Book>(ENDPOINTS.books.byId(bookId));
   },
 
-  async create(payload: BookRequest): Promise<Book> {
-    const { data } = await httpClient.post<Book>(ENDPOINTS.books.list, payload);
-    return data;
+  create(payload: BookRequest): Promise<Book> {
+    return httpClient.post<Book>(ENDPOINTS.books.list, payload);
   },
 
-  async update(bookId: string, payload: BookRequest): Promise<Book> {
-    const { data } = await httpClient.put<Book>(ENDPOINTS.books.byId(bookId), payload);
-    return data;
+  update(bookId: string, payload: BookRequest): Promise<Book> {
+    return httpClient.put<Book>(ENDPOINTS.books.byId(bookId), payload);
   },
 
-  async archive(bookId: string): Promise<Book> {
-    const { data } = await httpClient.post<Book>(ENDPOINTS.books.archive(bookId));
-    return data;
+  archive(bookId: string): Promise<Book> {
+    return httpClient.post<Book>(ENDPOINTS.books.archive(bookId));
   },
 
-  async unarchive(bookId: string): Promise<Book> {
-    const { data } = await httpClient.post<Book>(ENDPOINTS.books.unarchive(bookId));
-    return data;
+  unarchive(bookId: string): Promise<Book> {
+    return httpClient.post<Book>(ENDPOINTS.books.unarchive(bookId));
   },
 };

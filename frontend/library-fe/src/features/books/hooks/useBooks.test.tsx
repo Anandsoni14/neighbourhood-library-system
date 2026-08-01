@@ -6,14 +6,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setupStore } from '@/redux/store';
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 
 import { useBooks } from './useBooks';
 import { BookSortField } from '../types/book.types';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
-  attachAuthInterceptors: vi.fn(),
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+    attachAuthInterceptors: vi.fn(),
+  };
+});
 
 const book = {
   book_id: '1',
@@ -40,7 +45,7 @@ describe('useBooks', () => {
   });
 
   it('fetches books and exposes the resulting list and total', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ data: { items: [book], total: 1 } });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [book], total: 1 });
 
     const store = setupStore();
     const { result } = renderHook(() => useBooks(), { wrapper: wrapperFor(store) });
@@ -59,7 +64,7 @@ describe('useBooks', () => {
   });
 
   it('creates a book and reports the mutation as no longer in flight', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: book });
+    vi.mocked(httpClient.post).mockResolvedValue(book);
 
     const store = setupStore();
     const { result } = renderHook(() => useBooks(), { wrapper: wrapperFor(store) });

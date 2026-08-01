@@ -89,18 +89,24 @@ export function StaffFormDialog({
     setValues((prev) => ({ ...prev, role: event.target.value }));
   };
 
-  const phoneValid = values.phoneNumber.trim() === '' || PHONE_PATTERN.test(values.phoneNumber.trim());
+  const phoneValid =
+    values.phoneNumber.trim() === '' || PHONE_PATTERN.test(values.phoneNumber.trim());
   const canSubmit =
     values.firstName.trim().length > 0 &&
     values.lastName.trim().length > 0 &&
     EMAIL_PATTERN.test(values.email.trim()) &&
     phoneValid &&
-    (staff !== null || (values.employeeCode.trim().length > 0 && values.password.trim().length >= 8));
+    (staff !== null ||
+      (values.employeeCode.trim().length > 0 && values.password.trim().length >= 8));
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!values.firstName.trim() || !values.lastName.trim() || !EMAIL_PATTERN.test(values.email.trim())) {
+    if (
+      !values.firstName.trim() ||
+      !values.lastName.trim() ||
+      !EMAIL_PATTERN.test(values.email.trim())
+    ) {
       setFieldError('First name, last name, and a valid email are required.');
       return;
     }

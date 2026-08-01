@@ -13,8 +13,8 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const memberService = {
-  async list(params: ListMembersParams): Promise<Page<Member>> {
-    const { data } = await httpClient.get<Page<Member>>(ENDPOINTS.members.list, {
+  list(params: ListMembersParams): Promise<Page<Member>> {
+    return httpClient.get<Page<Member>>(ENDPOINTS.members.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -25,25 +25,21 @@ export const memberService = {
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async get(memberId: string): Promise<Member> {
-    const { data } = await httpClient.get<Member>(ENDPOINTS.members.byId(memberId));
-    return data;
+  get(memberId: string): Promise<Member> {
+    return httpClient.get<Member>(ENDPOINTS.members.byId(memberId));
   },
 
-  async create(payload: MemberRequest): Promise<Member> {
-    const { data } = await httpClient.post<Member>(ENDPOINTS.members.list, payload);
-    return data;
+  create(payload: MemberRequest): Promise<Member> {
+    return httpClient.post<Member>(ENDPOINTS.members.list, payload);
   },
 
-  async update(memberId: string, payload: MemberRequest): Promise<Member> {
-    const { data } = await httpClient.put<Member>(ENDPOINTS.members.byId(memberId), payload);
-    return data;
+  update(memberId: string, payload: MemberRequest): Promise<Member> {
+    return httpClient.put<Member>(ENDPOINTS.members.byId(memberId), payload);
   },
 
-  async remove(memberId: string): Promise<void> {
-    await httpClient.delete(ENDPOINTS.members.byId(memberId));
+  remove(memberId: string): Promise<void> {
+    return httpClient.delete<void>(ENDPOINTS.members.byId(memberId));
   },
 };

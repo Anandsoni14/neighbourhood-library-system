@@ -6,15 +6,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setupStore } from '@/redux/store';
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { MembershipStatus } from '@/types/api';
 
 import { useMembers } from './useMembers';
 import { MemberSortField } from '../types/member.types';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
-  attachAuthInterceptors: vi.fn(),
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+    attachAuthInterceptors: vi.fn(),
+  };
+});
 
 const member = {
   member_id: '1',
@@ -45,7 +50,7 @@ describe('useMembers', () => {
   });
 
   it('fetches members and exposes the resulting list and total', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ data: { items: [member], total: 1 } });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [member], total: 1 });
 
     const store = setupStore();
     const { result } = renderHook(() => useMembers(), { wrapper: wrapperFor(store) });
@@ -64,7 +69,7 @@ describe('useMembers', () => {
   });
 
   it('creates a member and reports the mutation as no longer in flight', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: member });
+    vi.mocked(httpClient.post).mockResolvedValue(member);
 
     const store = setupStore();
     const { result } = renderHook(() => useMembers(), { wrapper: wrapperFor(store) });

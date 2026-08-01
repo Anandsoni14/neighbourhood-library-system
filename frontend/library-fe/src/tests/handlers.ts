@@ -282,7 +282,11 @@ export const handlers = [
         matches(book.author, author) &&
         (categoryId ? book.category_id === categoryId : true) &&
         matches(book.isbn, isbn, true) &&
-        (archived === 'all' ? true : archived === 'archived' ? book.is_archived : !book.is_archived),
+        (archived === 'all'
+          ? true
+          : archived === 'archived'
+            ? book.is_archived
+            : !book.is_archived),
     );
 
     const sorted = [...filtered].sort((a, b) => {

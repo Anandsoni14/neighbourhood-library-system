@@ -104,7 +104,8 @@ export function CopyFormDialog({
   // their existing on-submit validation (below) rather than also disabling
   // the button, so a typo mid-edit doesn't lock the form before the error
   // message ever has a chance to explain what's wrong.
-  const canSubmit = (copy !== null || values.bookId.trim().length > 0) && values.barcode.trim().length > 0;
+  const canSubmit =
+    (copy !== null || values.bookId.trim().length > 0) && values.barcode.trim().length > 0;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

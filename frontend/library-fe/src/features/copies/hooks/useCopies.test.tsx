@@ -6,15 +6,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setupStore } from '@/redux/store';
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { CopyCondition, CopyStatus } from '@/types/api';
 
 import { useCopies } from './useCopies';
 import { BookCopySortField } from '../types/copy.types';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
-  attachAuthInterceptors: vi.fn(),
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+    attachAuthInterceptors: vi.fn(),
+  };
+});
 
 const copy = {
   copy_id: '1',
@@ -39,7 +44,7 @@ describe('useCopies', () => {
   });
 
   it('fetches copies and exposes the resulting list and total', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ data: { items: [copy], total: 1 } });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [copy], total: 1 });
 
     const store = setupStore();
     const { result } = renderHook(() => useCopies(), { wrapper: wrapperFor(store) });
@@ -58,7 +63,7 @@ describe('useCopies', () => {
   });
 
   it('creates a copy and reports the mutation as no longer in flight', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: copy });
+    vi.mocked(httpClient.post).mockResolvedValue(copy);
 
     const store = setupStore();
     const { result } = renderHook(() => useCopies(), { wrapper: wrapperFor(store) });

@@ -108,7 +108,8 @@ export function MemberFormDialog({
   };
 
   const emailValid = EMAIL_PATTERN.test(values.email.trim());
-  const phoneValid = values.phoneNumber.trim() === '' || PHONE_PATTERN.test(values.phoneNumber.trim());
+  const phoneValid =
+    values.phoneNumber.trim() === '' || PHONE_PATTERN.test(values.phoneNumber.trim());
   const postalCodeValid =
     values.postalCode.trim() === '' || POSTAL_CODE_PATTERN.test(values.postalCode.trim());
   const canSubmit =
@@ -191,7 +192,9 @@ export function MemberFormDialog({
                   required
                   error={values.email.trim().length > 0 && !emailValid}
                   helperText={
-                    values.email.trim().length > 0 && !emailValid ? 'Enter a valid email address.' : ' '
+                    values.email.trim().length > 0 && !emailValid
+                      ? 'Enter a valid email address.'
+                      : ' '
                   }
                 />
               </Grid>

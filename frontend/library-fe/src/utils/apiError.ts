@@ -1,5 +1,4 @@
-import axios from 'axios';
-
+import { isApiError } from '@/services/httpClient';
 import type { ApiErrorBody } from '@/types/api';
 
 /**
@@ -9,7 +8,7 @@ import type { ApiErrorBody } from '@/types/api';
  * sensibly instead of `[object Object]`.
  */
 export function getApiErrorMessage(error: unknown, fallback = 'Something went wrong.'): string {
-  if (!axios.isAxiosError(error)) {
+  if (!isApiError(error)) {
     return error instanceof Error ? error.message : fallback;
   }
 

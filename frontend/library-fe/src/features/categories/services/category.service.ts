@@ -13,8 +13,8 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const categoryService = {
-  async list(params: ListCategoriesParams): Promise<Page<Category>> {
-    const { data } = await httpClient.get<Page<Category>>(ENDPOINTS.categories.list, {
+  list(params: ListCategoriesParams): Promise<Page<Category>> {
+    return httpClient.get<Page<Category>>(ENDPOINTS.categories.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -24,26 +24,21 @@ export const categoryService = {
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async create(payload: CategoryRequest): Promise<Category> {
-    const { data } = await httpClient.post<Category>(ENDPOINTS.categories.list, payload);
-    return data;
+  create(payload: CategoryRequest): Promise<Category> {
+    return httpClient.post<Category>(ENDPOINTS.categories.list, payload);
   },
 
-  async update(categoryId: string, payload: CategoryRequest): Promise<Category> {
-    const { data } = await httpClient.put<Category>(ENDPOINTS.categories.byId(categoryId), payload);
-    return data;
+  update(categoryId: string, payload: CategoryRequest): Promise<Category> {
+    return httpClient.put<Category>(ENDPOINTS.categories.byId(categoryId), payload);
   },
 
-  async archive(categoryId: string): Promise<Category> {
-    const { data } = await httpClient.post<Category>(ENDPOINTS.categories.archive(categoryId));
-    return data;
+  archive(categoryId: string): Promise<Category> {
+    return httpClient.post<Category>(ENDPOINTS.categories.archive(categoryId));
   },
 
-  async unarchive(categoryId: string): Promise<Category> {
-    const { data } = await httpClient.post<Category>(ENDPOINTS.categories.unarchive(categoryId));
-    return data;
+  unarchive(categoryId: string): Promise<Category> {
+    return httpClient.post<Category>(ENDPOINTS.categories.unarchive(categoryId));
   },
 };

@@ -143,7 +143,12 @@ export function CategoriesPage() {
       </Stack>
 
       <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <Stack
+          direction="row"
+          spacing={2}
+          useFlexGap
+          sx={{ flexWrap: 'wrap', alignItems: 'center' }}
+        >
           <TextField
             label="Name"
             value={name}
@@ -221,7 +226,9 @@ export function CategoriesPage() {
                     <IconButton
                       size="small"
                       aria-label={
-                        category.is_archived ? `Unarchive ${category.name}` : `Archive ${category.name}`
+                        category.is_archived
+                          ? `Unarchive ${category.name}`
+                          : `Archive ${category.name}`
                       }
                       onClick={() => void handleToggleArchive(category)}
                     >

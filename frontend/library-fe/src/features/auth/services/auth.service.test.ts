@@ -1,15 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 
 import { authService } from './auth.service';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: {
-    post: vi.fn(),
-    get: vi.fn(),
-  },
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: {
+      post: vi.fn(),
+      get: vi.fn(),
+    },
+  };
+});
 
 describe('authService', () => {
   it('posts credentials to /auth/login', async () => {
@@ -27,7 +32,7 @@ describe('authService', () => {
         status: 'ACTIVE',
       },
     };
-    vi.mocked(httpClient.post).mockResolvedValue({ data: responseData });
+    vi.mocked(httpClient.post).mockResolvedValue(responseData);
 
     const result = await authService.login({ email: 'ada@example.com', password: 'secret123' });
 
@@ -49,7 +54,7 @@ describe('authService', () => {
       role: 'LIBRARIAN',
       status: 'ACTIVE',
     };
-    vi.mocked(httpClient.get).mockResolvedValue({ data: staff });
+    vi.mocked(httpClient.get).mockResolvedValue(staff);
 
     const result = await authService.getCurrentStaff();
 

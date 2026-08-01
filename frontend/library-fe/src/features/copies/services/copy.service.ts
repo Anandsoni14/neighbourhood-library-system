@@ -18,8 +18,8 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const copyService = {
-  async list(params: ListCopiesParams): Promise<Page<BookCopy>> {
-    const { data } = await httpClient.get<Page<BookCopy>>(ENDPOINTS.bookCopies.list, {
+  list(params: ListCopiesParams): Promise<Page<BookCopy>> {
+    return httpClient.get<Page<BookCopy>>(ENDPOINTS.bookCopies.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -31,25 +31,21 @@ export const copyService = {
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async get(copyId: string): Promise<BookCopy> {
-    const { data } = await httpClient.get<BookCopy>(ENDPOINTS.bookCopies.byId(copyId));
-    return data;
+  get(copyId: string): Promise<BookCopy> {
+    return httpClient.get<BookCopy>(ENDPOINTS.bookCopies.byId(copyId));
   },
 
-  async create(payload: BookCopyRequest): Promise<BookCopy> {
-    const { data } = await httpClient.post<BookCopy>(ENDPOINTS.bookCopies.list, payload);
-    return data;
+  create(payload: BookCopyRequest): Promise<BookCopy> {
+    return httpClient.post<BookCopy>(ENDPOINTS.bookCopies.list, payload);
   },
 
-  async update(copyId: string, payload: BookCopyUpdateRequest): Promise<BookCopy> {
-    const { data } = await httpClient.put<BookCopy>(ENDPOINTS.bookCopies.byId(copyId), payload);
-    return data;
+  update(copyId: string, payload: BookCopyUpdateRequest): Promise<BookCopy> {
+    return httpClient.put<BookCopy>(ENDPOINTS.bookCopies.byId(copyId), payload);
   },
 
-  async remove(copyId: string): Promise<void> {
-    await httpClient.delete(ENDPOINTS.bookCopies.byId(copyId));
+  remove(copyId: string): Promise<void> {
+    return httpClient.delete<void>(ENDPOINTS.bookCopies.byId(copyId));
   },
 };

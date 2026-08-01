@@ -135,10 +135,11 @@ export function BooksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, rowsPerPage, sortBy, sortDir, debouncedFilters]);
 
-  const handleFilterChange = (field: 'title' | 'author' | 'isbn') => (event: ChangeEvent<HTMLInputElement>) => {
-    setFilters((prev) => ({ ...prev, [field]: event.target.value }));
-    setPage(0);
-  };
+  const handleFilterChange =
+    (field: 'title' | 'author' | 'isbn') => (event: ChangeEvent<HTMLInputElement>) => {
+      setFilters((prev) => ({ ...prev, [field]: event.target.value }));
+      setPage(0);
+    };
 
   const handleCategoryFilterChange = (event: SelectChangeEvent<string>) => {
     setFilters((prev) => ({ ...prev, categoryId: event.target.value }));
@@ -358,7 +359,9 @@ export function BooksPage() {
                       </IconButton>
                       <IconButton
                         size="small"
-                        aria-label={book.is_archived ? `Unarchive ${book.title}` : `Archive ${book.title}`}
+                        aria-label={
+                          book.is_archived ? `Unarchive ${book.title}` : `Archive ${book.title}`
+                        }
                         onClick={(event) => {
                           event.stopPropagation();
                           void handleToggleArchive(book);
