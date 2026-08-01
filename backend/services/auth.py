@@ -22,15 +22,10 @@ class AuthService:
     async def login(self, email: str, password: str) -> tuple[Staff, str]:
         """Verify credentials and issue a bearer token.
 
-        Uses one generic message for unknown email and wrong password so a
-        caller can't tell which one was wrong (avoids user enumeration).
+        One generic error for unknown email, wrong password, and inactive
+        account alike — anything more specific would leak which case it was.
         """
         staff = await self.repository.get_by_email(email)
-        # A distinct "account is inactive" message here would leak, to anyone who
-        # already knows the password, that they found a real (but disabled)
-        # account — the exact user-enumeration this generic message exists to
-        # prevent. INACTIVE is folded into the same rejection as unknown-email
-        # and wrong-password.
         if (
             not staff
             or not verify_password(password, staff.password_hash)

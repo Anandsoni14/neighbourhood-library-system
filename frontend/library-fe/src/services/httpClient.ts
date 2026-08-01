@@ -9,11 +9,7 @@ const axiosInstance = axios.create({
   timeout: 10_000,
 });
 
-/**
- * The only file in the project that imports axios — every service goes
- * through this instead, so swapping the HTTP library only ever touches
- * this file. Unwraps `response.data` so callers work with plain payloads.
- */
+/** The only file that imports axios directly; unwraps `response.data` for callers. */
 export const httpClient = {
   get: <T>(url: string, config?: AxiosRequestConfig): Promise<T> =>
     axiosInstance.get<T>(url, config).then((response) => response.data),
@@ -32,10 +28,7 @@ export function isApiError(error: unknown): error is AxiosError {
   return axios.isAxiosError(error);
 }
 
-/**
- * Pure request-interceptor logic, factored out so it can be unit tested
- * without an axios instance or a Redux store in the loop.
- */
+/** Factored out so it can be unit tested without an axios instance or Redux store. */
 export function createAuthRequestInterceptor(getToken: () => string | null) {
   return (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     const token = getToken();
@@ -46,13 +39,8 @@ export function createAuthRequestInterceptor(getToken: () => string | null) {
   };
 }
 
-/**
- * Pure response-error-interceptor logic; same testability rationale.
- *
- * Typed to accept `Error` rather than `unknown`: axios always rejects with
- * the AxiosError it constructed (or whatever the previous interceptor threw),
- * never an arbitrary non-Error value, so re-rejecting it as-is is valid.
- */
+/** Same testability rationale as above. Typed to `Error`, not `unknown`, since
+ * axios always rejects with an Error-derived value. */
 export function createUnauthorizedResponseInterceptor(onUnauthorized: () => void) {
   return (error: Error): Promise<never> => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
@@ -62,13 +50,8 @@ export function createUnauthorizedResponseInterceptor(onUnauthorized: () => void
   };
 }
 
-/**
- * Wires the auth interceptors onto the shared instance via injected
- * callbacks rather than importing the Redux store directly here.
- * httpClient -> store -> authSlice -> auth.service -> httpClient would
- * otherwise be a circular module import; the store instead calls this
- * once, after it exists.
- */
+/** Injected callbacks avoid importing the store here, which would create a
+ * circular import: httpClient -> store -> authSlice -> auth.service -> httpClient. */
 export function attachAuthInterceptors(options: {
   getToken: () => string | null;
   onUnauthorized: () => void;

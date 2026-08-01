@@ -18,7 +18,7 @@ from core.exceptions import (
     NotFoundError,
 )
 from core.pagination import SortDir
-from models import Loan
+from models import Book, BookCopy, Loan, Member
 from models.enums import CopyCondition, CopyStatus, LoanStatus, MembershipStatus
 from repositories.book import BookRepository
 from repositories.book_copy import BookCopyRepository
@@ -56,10 +56,7 @@ class LoanService:
         remarks: str | None = None,
     ) -> Loan:
         """Issue a loan: member must be ACTIVE, copy must be AVAILABLE.
-
-        due_at is always computed server-side from the copy's max_borrow_days
-        — clients never supply it directly.
-        """
+        due_at is always server-computed from the copy's max_borrow_days."""
         member = await self._member_repository.get_by_id(member_id)
         if not member:
             raise NotFoundError(f"Member {member_id} not found")
@@ -76,9 +73,8 @@ class LoanService:
                 f"Book copy {copy_id} is not available (status: {copy.status})"
             )
 
-        # Archiving a book leaves its copies untouched (see BookService.archive_book),
-        # so this is the single enforcement point that stops a new loan on one.
-        # Returns are unaffected — return_loan never calls this check.
+        # Archiving leaves copies untouched, so this is the enforcement point
+        # that stops a new loan on an archived book. Returns are unaffected.
         book = await self._book_repository.get_by_id(copy.book_id)
         if book and book.is_archived:
             raise BookUnavailableException(
@@ -89,8 +85,7 @@ class LoanService:
         if not staff:
             raise NotFoundError(f"Staff {issued_by_staff_id} not found")
 
-        # Friendly pre-check; the DB's partial unique index (one_active_loan_per_copy)
-        # is the authoritative guard against a concurrent-request race.
+        # Friendly pre-check; the DB's unique index is the authoritative guard.
         if await self.repository.get_active_loan_for_copy(copy_id):
             raise BookUnavailableException(f"Book copy {copy_id} already has an active loan")
 
@@ -205,23 +200,44 @@ class LoanService:
         member_id: UUID | None = None,
         copy_id: UUID | None = None,
         status: LoanStatus | None = None,
+        member_name: str | None = None,
+        book_title: str | None = None,
+        copy_barcode: str | None = None,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Loan], int]:
         """List loans matching every supplied filter, returning the page and total.
-
-        Filters combine, so "this member's active loans" — the question asked on
-        every checkout — is one request rather than a client-side intersection.
+        `member_name`/`book_title`/`copy_barcode` are substring matches joined
+        out via Member and BookCopy, so the desk can search by name, not ID.
         """
         filters: list[ColumnElement[bool]] = []
+        needs_copy_join = bool(book_title or copy_barcode)
+        needs_book_join = bool(book_title)
+        needs_member_join = bool(member_name)
+
         if member_id is not None:
             filters.append(Loan.member_id == member_id)
         if copy_id is not None:
             filters.append(Loan.copy_id == copy_id)
         if status is not None:
             filters.append(Loan.status == status)
+        if member_name:
+            pattern = f"%{member_name}%"
+            filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
+        if book_title:
+            filters.append(Book.title.ilike(f"%{book_title}%"))
+        if copy_barcode:
+            filters.append(BookCopy.barcode.ilike(f"%{copy_barcode}%"))
+
+        joins: list[InstrumentedAttribute[Any]] = []
+        if needs_copy_join:
+            joins.append(Loan.copy)
+        if needs_book_join:
+            joins.append(BookCopy.book)
+        if needs_member_join:
+            joins.append(Loan.member)
 
         loans, total = await self.repository.list_paginated(
             filters=filters,
@@ -229,6 +245,7 @@ class LoanService:
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
+            joins=joins,
         )
         return list(loans), total
 
@@ -241,13 +258,9 @@ class LoanService:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[OverdueLoan], int]:
-        """List ACTIVE loans past due, with each one's current overdue day count
-        and estimated fine (the loan hasn't been returned, so calculated_fine is
-        still 0 on the row itself).
-
-        The copy is eager-loaded because late_fee_per_day is needed for every
-        row and the relationship is lazy="raise".
-        """
+        """List ACTIVE loans past due, with each one's overdue day count and
+        estimated fine. Copy is eager-loaded: late_fee_per_day is needed per
+        row and the relationship is lazy="raise"."""
         as_of = as_of or datetime.now(UTC)
         loans, total = await self.repository.list_paginated(
             filters=[Loan.status == LoanStatus.ACTIVE, Loan.due_at < as_of],

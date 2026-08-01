@@ -1,12 +1,8 @@
 import { isApiError } from '@/services/httpClient';
 import type { ApiErrorBody } from '@/types/api';
 
-/**
- * Domain errors return `{"detail": "a message"}`; FastAPI's own validation
- * errors return `{"detail": [ValidationIssue, ...]}`. Every place that
- * surfaces an API error to the user goes through this so both shapes render
- * sensibly instead of `[object Object]`.
- */
+/** Normalizes both ApiErrorBody shapes (string detail vs validation issue
+ * list) into a single displayable message instead of `[object Object]`. */
 export function getApiErrorMessage(error: unknown, fallback = 'Something went wrong.'): string {
   if (!isApiError(error)) {
     return error instanceof Error ? error.message : fallback;

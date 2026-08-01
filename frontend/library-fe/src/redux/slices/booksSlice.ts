@@ -13,13 +13,8 @@ interface BooksState {
   error: string | null;
   mutationStatus: RequestStatus;
   mutationError: string | null;
-  /**
-   * The most recently *dispatched* fetchBooks requestId. Filter/sort/page
-   * changes can fire fetches faster than they resolve, so a slow response
-   * for a stale filter could otherwise land after a newer one and clobber
-   * it — fulfilled/rejected handlers ignore any requestId that doesn't
-   * match this, keeping "last dispatched wins" instead of "last resolved wins".
-   */
+  /** Most recently dispatched fetchBooks requestId; fulfilled/rejected handlers
+   * ignore stale responses so a slow request can't clobber a newer one. */
   latestRequestId: string | null;
 }
 

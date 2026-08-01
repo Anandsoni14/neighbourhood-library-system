@@ -48,23 +48,16 @@ class Book(Base, TimestampMixin):
     isbn: Mapped[str | None] = mapped_column(String(20), unique=True)
     category_id: Mapped[UUID | None] = mapped_column(
         PGUUID(as_uuid=True),
-        # Named explicitly: the metadata has no naming_convention, so an unnamed
-        # FK gets an implicit server-side name and the migration's downgrade
-        # drop_constraint() would have to guess it.
+        # Named explicitly so migration downgrades don't have to guess the implicit FK name.
         ForeignKey("category.category_id", ondelete="RESTRICT", name="fk_book_category_id"),
     )
     description: Mapped[str | None] = mapped_column(Text)
     published_year: Mapped[int | None] = mapped_column(SmallInteger)
-    # Books are archived, never deleted — a catalogue keeps its history, and a
-    # book with loan history cannot be removed without destroying that record.
+    # Archived, never deleted — books with loan history can't be removed without losing that record.
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
 
-    # lazy="selectin" deviates from this codebase's lazy="raise" convention, on
-    # purpose. BookResponse.model_validate() touches `category` on every read,
-    # so lazy="raise" would mean threading selectinload() through list_books,
-    # get_book, and the post-flush reads in create_book/update_book — four sites,
-    # each an unguarded InvalidRequestError in production if one is missed.
-    # Category is a small dimension table, so the extra SELECT is negligible.
+    # lazy="selectin" (not this codebase's usual lazy="raise"): BookResponse reads
+    # `category` on every response, and Category is a small dimension table.
     category: Mapped["Category | None"] = relationship(back_populates="books", lazy="selectin")
     copies: Mapped[list["BookCopy"]] = relationship(back_populates="book", lazy="raise")
 

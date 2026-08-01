@@ -155,15 +155,10 @@ class StaffService:
     async def deactivate_staff(self, staff_id: UUID, *, acting_staff_id: UUID) -> Staff:
         """Set a staff member's status to INACTIVE (soft-disable, not deletion).
 
-        Two guards that a generic `update_staff(status=...)` call cannot express
-        because it doesn't know the caller's intent is specifically "deactivate":
-
-        - An ADMIN cannot deactivate themselves: `api/deps.get_current_staff`
-          re-checks status == ACTIVE on every request, so this would invalidate
-          the caller's own token mid-request.
-        - The last remaining ACTIVE ADMIN cannot be deactivated: doing so would
-          lock every ADMIN-only endpoint — including this one — with no recovery
-          short of a direct database edit.
+        Guards a generic update_staff(status=...) can't express: an ADMIN can't
+        deactivate themselves (would invalidate their own token mid-request),
+        and the last active ADMIN can't be deactivated (would lock every
+        ADMIN-only endpoint with no recovery).
         """
         if staff_id == acting_staff_id:
             raise ConflictError("You cannot deactivate your own account")

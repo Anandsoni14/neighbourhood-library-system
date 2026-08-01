@@ -9,10 +9,8 @@ import { LoginPage } from '@/pages/LoginPage';
 import { ProtectedRoute } from './ProtectedRoute';
 import { ROUTES } from './paths';
 
-// Everything behind ProtectedRoute is lazy-loaded so the initial bundle only
-// ships the login flow — the rest splits into per-route chunks, fetched on
-// first navigation. LoginPage stays eager since it's the first thing every
-// unauthenticated visitor needs.
+// Lazy-loaded so the initial bundle only ships the login flow; LoginPage
+// stays eager since it's the first thing every unauthenticated visitor needs.
 const DashboardPage = lazy(() =>
   import('@/pages/DashboardPage').then((module) => ({ default: module.DashboardPage })),
 );

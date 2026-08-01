@@ -1,7 +1,6 @@
-// Transcribed verbatim from backend/alembic/versions/996e4dceab29_initial_schema.py.
-// Plain `as const` objects rather than TS `enum`: the values are exactly the
-// strings the API sends and receives, so no numeric-vs-string enum mismatch
-// is possible, and no const-enum inlining restriction applies under isolatedModules.
+// Transcribed from backend/alembic/versions/996e4dceab29_initial_schema.py.
+// Plain `as const` objects rather than TS `enum` so values match the API's
+// strings exactly, with no isolatedModules const-enum restriction.
 
 export const StaffRole = {
   ADMIN: 'ADMIN',
@@ -74,11 +73,8 @@ export interface ValidationIssue {
   type: string;
 }
 
-/**
- * Domain errors (404/409/401/403) return `{"detail": "a message"}`; FastAPI's
- * own validation errors (422) return `{"detail": [ValidationIssue, ...]}`.
- * Every error handler must accept both shapes.
- */
+/** Domain errors return `{detail: string}`; 422 validation errors return
+ * `{detail: ValidationIssue[]}` — handlers must accept both shapes. */
 export interface ApiErrorBody {
   detail: string | ValidationIssue[];
 }

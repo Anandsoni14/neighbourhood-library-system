@@ -91,7 +91,7 @@ async def list_categories(
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
 ) -> Page[CategoryResponse]:
-    """List categories. Archived categories are excluded unless asked for."""
+    """List categories. Filters combine; archived ones are excluded by default."""
     service = CategoryService(db)
     categories, total = await service.list_categories(
         name=name,
@@ -122,9 +122,8 @@ async def update_category(
     return CategoryResponse.model_validate(category)
 
 
-# Deliberately no DELETE: book.category_id is ondelete=RESTRICT, so deleting any
-# category that has ever been used would always 409. Archiving is what the UI
-# actually needs, and unlike a delete it is reversible.
+# Deliberately no DELETE: book.category_id is ondelete=RESTRICT, so deleting
+# a used category always 409s. Archiving is the reversible equivalent.
 @router.post("/{category_id}/archive", response_model=CategoryResponse)
 async def archive_category(
     category_id: UUID, db: AsyncSession = Depends(get_db)

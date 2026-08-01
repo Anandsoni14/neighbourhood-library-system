@@ -65,11 +65,9 @@ function valuesFromStaff(staff: Staff | null): FormValues {
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\d{10}$/;
 
-// Shared by StaffPage for both "Add staff" (staff: null) and "Edit staff".
-// The caller remounts this with a fresh `key` each time it opens (see
-// StaffPage), so fields re-seed via the lazy initializer below. Password is
-// only collected on create — changing a password is a separate, dedicated
-// backend endpoint this dialog doesn't drive.
+// Shared for "Add staff" (staff: null) and "Edit staff"; the caller remounts
+// with a fresh `key` each open. Password is only collected on create — a
+// password change is a separate backend endpoint this dialog doesn't drive.
 export function StaffFormDialog({
   open,
   staff,

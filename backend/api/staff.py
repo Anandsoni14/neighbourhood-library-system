@@ -180,11 +180,7 @@ async def deactivate_staff(
     db: AsyncSession = Depends(get_db),
     current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
-    """Deactivate a staff member. ADMIN only.
-
-    Refuses self-deactivation and deactivating the last active admin — see
-    StaffService.deactivate_staff for why those guards live in the service.
-    """
+    """Deactivate a staff member. ADMIN only (guards in StaffService.deactivate_staff)."""
     service = StaffService(db)
     staff = await service.deactivate_staff(staff_id, acting_staff_id=current_staff.staff_id)
     return StaffResponse.model_validate(staff)

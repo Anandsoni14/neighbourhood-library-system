@@ -20,11 +20,7 @@ router = APIRouter(
 
 
 class BookSortField(StrEnum):
-    """Columns a book listing may be sorted by.
-
-    An allowlist rather than a free-text column name: FastAPI rejects anything
-    else with 422 before it reaches the query builder.
-    """
+    """Allowlisted sort columns; anything else 422s before reaching the query builder."""
 
     TITLE = "title"
     AUTHOR = "author"
@@ -36,8 +32,7 @@ class BookSortField(StrEnum):
 _SORT_COLUMNS = {
     BookSortField.TITLE: Book.title,
     BookSortField.AUTHOR: Book.author,
-    # Sorts on the joined category table; BookService always applies the OUTER
-    # join, so books with no category still sort (as NULL) rather than vanish.
+    # OUTER join, so uncategorized books still sort (as NULL) instead of vanishing.
     BookSortField.CATEGORY: Category.name,
     BookSortField.PUBLISHED_YEAR: Book.published_year,
     BookSortField.CREATED_AT: Book.created_at,
@@ -45,12 +40,7 @@ _SORT_COLUMNS = {
 
 
 class BookArchiveFilter(StrEnum):
-    """Which slice of the catalogue a listing should return.
-
-    Tri-state rather than a boolean `include_archived`: that flag can only ever
-    express "active plus archived", never "archived only", so the archived view
-    the UI needs would require a second parameter later.
-    """
+    """Tri-state so "archived only" is expressible, not just "active plus archived"."""
 
     ACTIVE = "active"
     ARCHIVED = "archived"
@@ -133,11 +123,7 @@ async def list_books(
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
 ) -> Page[BookResponse]:
-    """List books. Every supplied filter is applied together.
-
-    Archived books are excluded by default; pass `archived=archived` for only
-    those, or `archived=all` for both.
-    """
+    """List books. Filters combine; archived books are excluded by default."""
     service = BookService(db)
     books, total = await service.list_books(
         title=title,
@@ -164,11 +150,8 @@ async def search_books(
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
 ) -> Page[BookResponse]:
-    """Search books by title and/or ISBN.
-
-    Declared before /{book_id} so this static path isn't captured by the
-    book_id UUID path parameter.
-    """
+    """Search books by title and/or ISBN. Declared before /{book_id} so this
+    static path isn't captured by the book_id UUID path parameter."""
     if not title and not isbn:
         raise HTTPException(
             status_code=400, detail="Provide at least one search parameter (title or isbn)"
@@ -213,10 +196,8 @@ async def update_book(
     return BookResponse.model_validate(book)
 
 
-# Deliberately no DELETE. A book with copies cannot be removed without
-# destroying the loan history attached to those copies; archiving is the
-# reversible equivalent the UI actually needs. FastAPI returns 405 for DELETE
-# on this path now, which is the correct signal that the operation is gone.
+# Deliberately no DELETE: a book with copies can't be removed without
+# destroying loan history. Archiving is the reversible equivalent.
 @router.post("/{book_id}/archive", response_model=BookResponse)
 async def archive_book(book_id: UUID, db: AsyncSession = Depends(get_db)) -> BookResponse:
     """Archive a book, hiding it from the default listing and blocking new loans."""

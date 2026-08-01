@@ -38,10 +38,7 @@ _SORT_COLUMNS = {
 
 
 class LoanIssueRequest(BaseModel):
-    """Request schema for issuing a loan. due_at is always server-computed.
-
-    issued_by_staff_id is not a field here — it's the authenticated caller.
-    """
+    """due_at is server-computed; issued_by_staff_id is the authenticated caller."""
 
     copy_id: UUID
     member_id: UUID
@@ -49,10 +46,7 @@ class LoanIssueRequest(BaseModel):
 
 
 class LoanReturnRequest(BaseModel):
-    """Request schema for returning a loan.
-
-    received_by_staff_id is not a field here — it's the authenticated caller.
-    """
+    """received_by_staff_id is the authenticated caller, not a request field."""
 
     return_condition: CopyCondition
     remarks: str | None = None
@@ -159,10 +153,10 @@ async def list_overdue_loans(
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
 ) -> Page[OverdueLoanResponse]:
-    """List ACTIVE loans past due, with each one's overdue day count and estimated fine.
+    """List ACTIVE loans past due, with overdue day count and estimated fine.
 
     Declared before /{loan_id} so this static path isn't swallowed by the
-    loan_id UUID path parameter. Defaults to most-overdue first.
+    loan_id UUID path parameter.
     """
     service = LoanService(db)
     overdue, total = await service.get_overdue_loans(

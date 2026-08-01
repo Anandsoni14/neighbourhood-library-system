@@ -93,11 +93,7 @@ class MemberService:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Member], int]:
-        """List members matching every supplied filter, returning the page and total.
-
-        `name` matches either the first or last name, so a single search box can
-        find "Ada" and "Lovelace" alike.
-        """
+        """List members matching every supplied filter. `name` matches first or last."""
         filters: list[ColumnElement[bool]] = []
         if status is not None:
             filters.append(Member.membership_status == status)
@@ -152,12 +148,7 @@ class MemberService:
         return member
 
     async def suspend_member(self, member_id: UUID) -> Member:
-        """Suspend a member (-> BLOCKED), blocking new loans immediately.
-
-        Idempotent, so a retried request behaves the same as the first one.
-        Enforcement is `LoanService.issue_loan`'s existing ACTIVE-only check —
-        this only flips the status that check reads.
-        """
+        """Suspend a member (-> BLOCKED), blocking new loans. Idempotent."""
         member = await self.get_member(member_id)
         member.membership_status = MembershipStatus.BLOCKED
         self._session.add(member)
