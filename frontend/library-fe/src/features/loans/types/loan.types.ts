@@ -46,6 +46,9 @@ export interface ListLoansParams {
   memberId?: string;
   copyId?: string;
   status?: LoanStatus;
+  memberName?: string;
+  bookTitle?: string;
+  copyBarcode?: string;
   sortBy: LoanSortField;
   sortDir: SortDir;
 }

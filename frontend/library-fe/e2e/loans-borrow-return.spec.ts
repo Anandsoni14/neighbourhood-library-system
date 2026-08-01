@@ -209,15 +209,15 @@ test.describe('loan lifecycle', () => {
 
     await dialog.getByRole('button', { name: 'Issue loan' }).click();
 
-    await expect(page.getByRole('cell', { name: 'ACTIVE' })).toBeVisible();
+    await expect(page.getByText('ACTIVE')).toBeVisible();
 
-    await page.getByRole('button', { name: /return loan/i }).click();
+    await page.getByRole('menuitem', { name: /return loan/i }).click();
     const returnDialog = page.getByRole('dialog');
     await returnDialog.getByLabel(/return condition/i).click();
     await page.getByRole('option', { name: 'Good' }).click();
     await returnDialog.getByRole('button', { name: 'Return' }).click();
 
-    await expect(page.getByRole('cell', { name: 'RETURNED' })).toBeVisible();
+    await expect(page.getByText('RETURNED', { exact: true })).toBeVisible();
     await expect(page.getByText(/Loan returned\. Fine: \$2\.50/)).toBeVisible();
   });
 });

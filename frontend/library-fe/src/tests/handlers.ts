@@ -568,16 +568,30 @@ export const handlers = [
     const memberId = url.searchParams.get('member_id');
     const copyId = url.searchParams.get('copy_id');
     const status = url.searchParams.get('status');
+    const memberName = url.searchParams.get('member_name');
+    const bookTitle = url.searchParams.get('book_title');
+    const copyBarcode = url.searchParams.get('copy_barcode');
     const sortBy = (url.searchParams.get('sort_by') ??
       'borrowed_at') as keyof (typeof loans)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'desc';
 
-    const filtered = loans.filter(
-      (loan) =>
+    const filtered = loans.filter((loan) => {
+      const copy = copies.find((candidate) => candidate.copy_id === loan.copy_id);
+      const book = copy ? books.find((candidate) => candidate.book_id === copy.book_id) : undefined;
+      const member = members.find((candidate) => candidate.member_id === loan.member_id);
+
+      return (
         (memberId ? loan.member_id === memberId : true) &&
         (copyId ? loan.copy_id === copyId : true) &&
-        (status ? loan.status === status : true),
-    );
+        (status ? loan.status === status : true) &&
+        (memberName
+          ? matches(member?.first_name ?? null, memberName) ||
+            matches(member?.last_name ?? null, memberName)
+          : true) &&
+        matches(book?.title ?? null, bookTitle) &&
+        matches(copy?.barcode ?? null, copyBarcode)
+      );
+    });
 
     const sorted = [...filtered].sort((a, b) => {
       const left = a[sortBy];

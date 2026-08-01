@@ -4,26 +4,19 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import FormControl from '@mui/material/FormControl';
-import IconButton from '@mui/material/IconButton';
-import InputLabel from '@mui/material/InputLabel';
-import LinearProgress from '@mui/material/LinearProgress';
-import MenuItem from '@mui/material/MenuItem';
-import Paper from '@mui/material/Paper';
-import Select, { type SelectChangeEvent } from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
-import TableRow from '@mui/material/TableRow';
-import TableSortLabel from '@mui/material/TableSortLabel';
-import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { type ChangeEvent, useEffect, useState } from 'react';
+import {
+  GridActionsCellItem,
+  type GridColDef,
+  type GridFilterModel,
+  type GridRowParams,
+  type GridSortModel,
+} from '@mui/x-data-grid';
+import { useEffect, useMemo, useState } from 'react';
 
+import { DataTable } from '@/components/DataTable';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { IssueLoanDialog } from '@/features/loans/components/IssueLoanDialog';
 import { ReturnLoanDialog } from '@/features/loans/components/ReturnLoanDialog';
@@ -31,34 +24,35 @@ import { useLoanEnrichment } from '@/features/loans/hooks/useLoanEnrichment';
 import { useLoans } from '@/features/loans/hooks/useLoans';
 import { LoanSortField } from '@/features/loans/types/loan.types';
 import type { Loan, LoanIssueRequest, LoanReturnRequest } from '@/features/loans/types/loan.types';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { LoanStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
+import {
+  containsOnlyOperators,
+  equalsOnlyOperators,
+  filtersFromFilterModel,
+} from '@/utils/gridFilterOperators';
 
-/** How long a filter text field must sit idle before it triggers a fetch. */
-const FILTER_DEBOUNCE_MS = 300;
+type Filters = Record<'member' | 'book' | 'barcode' | 'status', string>;
 
-interface SortableColumn {
-  field: LoanSortField;
-  label: string;
+const emptyFilters: Filters = { member: '', book: '', barcode: '', status: '' };
+
+// No default filter: MUI Community's filter panel only supports one active
+// filter at a time, so pre-setting Status would block filtering by anything else.
+const defaultFilters: Filters = emptyFilters;
+
+const STATUS_OPTIONS = ['Active', 'Returned'];
+
+function statusToLoanStatus(status: string): LoanStatus | undefined {
+  if (status === 'Active') {
+    return LoanStatus.ACTIVE;
+  }
+  if (status === 'Returned') {
+    return LoanStatus.RETURNED;
+  }
+  return undefined;
 }
-
-const columns: SortableColumn[] = [
-  { field: LoanSortField.BORROWED_AT, label: 'Borrowed at' },
-  { field: LoanSortField.DUE_AT, label: 'Due at' },
-  { field: LoanSortField.RETURNED_AT, label: 'Returned at' },
-  { field: LoanSortField.STATUS, label: 'Status' },
-  { field: LoanSortField.CALCULATED_FINE, label: 'Fine' },
-];
-
-interface Filters {
-  memberId: string;
-  copyId: string;
-  status: LoanStatus | '';
-}
-
-const emptyFilters: Filters = { memberId: '', copyId: '', status: '' };
 
 function formatDate(value: string | null): string {
   if (!value) {
@@ -84,15 +78,21 @@ export function LoansPage() {
   } = useLoans();
   const { members, copies, books } = useLoanEnrichment(loans);
 
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
-  // Only the free-text fields are debounced — `status` is a discrete Select
-  // choice, not a per-keystroke value, so it should filter immediately.
-  const debouncedMemberId = useDebouncedValue(filters.memberId, FILTER_DEBOUNCE_MS);
-  const debouncedCopyId = useDebouncedValue(filters.copyId, FILTER_DEBOUNCE_MS);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [sortBy, setSortBy] = useState<LoanSortField>(LoanSortField.BORROWED_AT);
-  const [sortDir, setSortDir] = useState<SortDir>(SortDir.DESC);
+  const {
+    filters,
+    debouncedFilters,
+    setFilters,
+    page,
+    pageSize,
+    setPagination,
+    sortField,
+    sortDir,
+    setSort,
+  } = useTableQueryParams<Filters>({
+    defaultFilters,
+    defaultSortField: LoanSortField.BORROWED_AT,
+    defaultSortDir: SortDir.DESC,
+  });
 
   const [issueOpen, setIssueOpen] = useState(false);
   const [issueKey, setIssueKey] = useState(0);
@@ -100,52 +100,24 @@ export function LoansPage() {
   const [returnKey, setReturnKey] = useState(0);
   const [justReturnedFine, setJustReturnedFine] = useState<number | null>(null);
 
+  const fetchParams = {
+    skip: page * pageSize,
+    limit: pageSize,
+    memberName: debouncedFilters.member || undefined,
+    bookTitle: debouncedFilters.book || undefined,
+    copyBarcode: debouncedFilters.barcode || undefined,
+    status: statusToLoanStatus(debouncedFilters.status),
+    sortBy: sortField as LoanSortField,
+    sortDir,
+  };
+
   useEffect(() => {
-    void fetchLoans({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      memberId: debouncedMemberId,
-      copyId: debouncedCopyId,
-      status: filters.status || undefined,
-      sortBy,
-      sortDir,
-    });
+    void fetchLoans(fetchParams);
     // fetchLoans is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, sortBy, sortDir, debouncedMemberId, debouncedCopyId, filters.status]);
+  }, [page, pageSize, sortField, sortDir, debouncedFilters]);
 
-  const handleTextFilterChange =
-    (field: 'memberId' | 'copyId') => (event: ChangeEvent<HTMLInputElement>) => {
-      setFilters((prev) => ({ ...prev, [field]: event.target.value }));
-      setPage(0);
-    };
-
-  const handleStatusFilterChange = (event: SelectChangeEvent<LoanStatus | ''>) => {
-    setFilters((prev) => ({ ...prev, status: event.target.value }));
-    setPage(0);
-  };
-
-  const handleSort = (field: LoanSortField) => {
-    if (field === sortBy) {
-      setSortDir(sortDir === SortDir.ASC ? SortDir.DESC : SortDir.ASC);
-    } else {
-      setSortBy(field);
-      setSortDir(SortDir.ASC);
-    }
-    setPage(0);
-  };
-
-  const refetch = () => {
-    void fetchLoans({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      memberId: filters.memberId,
-      copyId: filters.copyId,
-      status: filters.status || undefined,
-      sortBy,
-      sortDir,
-    });
-  };
+  const refetch = () => void fetchLoans(fetchParams);
 
   const openIssueDialog = () => {
     setIssueOpen(true);
@@ -188,6 +160,139 @@ export function LoansPage() {
     }
   };
 
+  const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
+    items: (Object.keys(filters) as (keyof Filters)[])
+      .filter((key) => filters[key])
+      .map((key) => ({
+        field: key,
+        operator: key === 'status' ? 'is' : 'contains',
+        value: filters[key],
+      })),
+  }));
+
+  const handleFilterModelChange = (model: GridFilterModel) => {
+    setFilterModel(model);
+    setFilters(filtersFromFilterModel(model, emptyFilters));
+  };
+
+  const handleSortModelChange = (model: GridSortModel) => {
+    const item = model[0];
+    if (item?.sort) {
+      setSort(item.field, item.sort === 'desc' ? SortDir.DESC : SortDir.ASC);
+    }
+  };
+
+  const paginationModel = useMemo(() => ({ page, pageSize }), [page, pageSize]);
+  const sortModel: GridSortModel = useMemo(
+    () => [{ field: sortField, sort: sortDir }],
+    [sortField, sortDir],
+  );
+
+  // Not memoized: closes over render-scoped state (members, copies, books)
+  // that would all need to be deps anyway; recomputing this small array each
+  // render is cheap and avoids stale-closure bugs.
+  const columns: GridColDef<Loan>[] = [
+    {
+      field: 'member',
+      headerName: 'Member',
+      flex: 1,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => {
+        const member = members[row.member_id];
+        return member ? `${member.first_name} ${member.last_name}` : '…';
+      },
+    },
+    {
+      field: 'book',
+      headerName: 'Book',
+      flex: 1,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => {
+        const copy = copies[row.copy_id];
+        const book = copy ? books[copy.book_id] : undefined;
+        return book ? book.title : '…';
+      },
+    },
+    {
+      field: 'barcode',
+      headerName: 'Copy barcode',
+      flex: 0.8,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => copies[row.copy_id]?.barcode ?? '…',
+    },
+    {
+      field: 'borrowed_at',
+      headerName: 'Borrowed at',
+      flex: 1,
+      filterable: false,
+      valueGetter: (_value, row) => formatDate(row.borrowed_at),
+    },
+    {
+      field: 'due_at',
+      headerName: 'Due at',
+      flex: 1,
+      filterable: false,
+      valueGetter: (_value, row) => formatDate(row.due_at),
+    },
+    {
+      field: 'returned_at',
+      headerName: 'Returned at',
+      flex: 1,
+      filterable: false,
+      valueGetter: (_value, row) => formatDate(row.returned_at),
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 130,
+      type: 'singleSelect',
+      valueOptions: STATUS_OPTIONS,
+      filterOperators: equalsOnlyOperators,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.row.status}
+          color={params.row.status === LoanStatus.ACTIVE ? 'info' : 'success'}
+          variant="outlined"
+        />
+      ),
+    },
+    {
+      field: 'calculated_fine',
+      headerName: 'Fine',
+      width: 100,
+      filterable: false,
+      renderCell: (params) =>
+        params.row.status === LoanStatus.RETURNED
+          ? Number(params.row.calculated_fine).toFixed(2)
+          : '—',
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 80,
+      getActions: (params: GridRowParams<Loan>) => {
+        if (params.row.status !== LoanStatus.ACTIVE) {
+          return [];
+        }
+        return [
+          <Tooltip key="return" title={`Return loan ${params.row.loan_id}`}>
+            <GridActionsCellItem
+              icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
+              label={`Return loan ${params.row.loan_id}`}
+              onClick={() => openReturnDialog(params.row)}
+              showInMenu={false}
+            />
+          </Tooltip>,
+        ];
+      },
+    },
+  ];
+
   return (
     <Box>
       <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -199,130 +304,26 @@ export function LoansPage() {
         </Button>
       </Stack>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <TextField
-            label="Member ID"
-            value={filters.memberId}
-            onChange={handleTextFilterChange('memberId')}
-            sx={{ minWidth: 220 }}
-          />
-          <TextField
-            label="Copy ID"
-            value={filters.copyId}
-            onChange={handleTextFilterChange('copyId')}
-            sx={{ minWidth: 220 }}
-          />
-          <FormControl sx={{ minWidth: 160 }}>
-            <InputLabel id="loan-status-filter-label">Status</InputLabel>
-            <Select
-              labelId="loan-status-filter-label"
-              label="Status"
-              value={filters.status}
-              onChange={handleStatusFilterChange}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value={LoanStatus.ACTIVE}>Active</MenuItem>
-              <MenuItem value={LoanStatus.RETURNED}>Returned</MenuItem>
-            </Select>
-          </FormControl>
-        </Stack>
-      </Paper>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Paper>
-        {isLoading && <LinearProgress />}
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Member</TableCell>
-                <TableCell>Book</TableCell>
-                {columns.map((column) => (
-                  <TableCell key={column.field}>
-                    <TableSortLabel
-                      active={sortBy === column.field}
-                      direction={sortBy === column.field ? sortDir : SortDir.ASC}
-                      onClick={() => handleSort(column.field)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loans.length === 0 && !isLoading && (
-                <TableRow>
-                  <TableCell colSpan={columns.length + 3} align="center">
-                    No loans found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {loans.map((loan) => {
-                const member = members[loan.member_id];
-                const copy = copies[loan.copy_id];
-                const book = copy ? books[copy.book_id] : undefined;
-                return (
-                  <TableRow key={loan.loan_id} hover>
-                    <TableCell>
-                      {member ? `${member.first_name} ${member.last_name}` : '…'}
-                    </TableCell>
-                    <TableCell>
-                      {copy ? `${book ? book.title : '…'} (${copy.barcode})` : '…'}
-                    </TableCell>
-                    <TableCell>{formatDate(loan.borrowed_at)}</TableCell>
-                    <TableCell>{formatDate(loan.due_at)}</TableCell>
-                    <TableCell>{formatDate(loan.returned_at)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={loan.status}
-                        color={loan.status === LoanStatus.ACTIVE ? 'info' : 'success'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {loan.status === LoanStatus.RETURNED
-                        ? Number(loan.calculated_fine).toFixed(2)
-                        : '—'}
-                    </TableCell>
-                    <TableCell align="right">
-                      {loan.status === LoanStatus.ACTIVE && (
-                        <IconButton
-                          size="small"
-                          aria-label={`Return loan ${loan.loan_id}`}
-                          onClick={() => openReturnDialog(loan)}
-                        >
-                          <AssignmentReturnOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_event, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => {
-            setRowsPerPage(Number(event.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
-      </Paper>
+      <DataTable
+        columns={columns}
+        rows={loans}
+        getRowId={(row: Loan) => row.loan_id}
+        rowCount={total}
+        loading={isLoading}
+        autoHeight
+        paginationModel={paginationModel}
+        onPaginationModelChange={(model) => setPagination(model.page, model.pageSize)}
+        sortModel={sortModel}
+        onSortModelChange={handleSortModelChange}
+        filterModel={filterModel}
+        onFilterModelChange={handleFilterModelChange}
+      />
 
       <IssueLoanDialog
         key={`issue-${issueKey}`}
