@@ -1,4 +1,5 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 import type { Page } from '@/types/api';
 
 import type {
@@ -18,7 +19,7 @@ function nonEmpty(value: string | undefined): string | undefined {
 
 export const copyService = {
   async list(params: ListCopiesParams): Promise<Page<BookCopy>> {
-    const { data } = await httpClient.get<Page<BookCopy>>('/book-copies', {
+    const { data } = await httpClient.get<Page<BookCopy>>(ENDPOINTS.bookCopies.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -34,21 +35,21 @@ export const copyService = {
   },
 
   async get(copyId: string): Promise<BookCopy> {
-    const { data } = await httpClient.get<BookCopy>(`/book-copies/${copyId}`);
+    const { data } = await httpClient.get<BookCopy>(ENDPOINTS.bookCopies.byId(copyId));
     return data;
   },
 
   async create(payload: BookCopyRequest): Promise<BookCopy> {
-    const { data } = await httpClient.post<BookCopy>('/book-copies', payload);
+    const { data } = await httpClient.post<BookCopy>(ENDPOINTS.bookCopies.list, payload);
     return data;
   },
 
   async update(copyId: string, payload: BookCopyUpdateRequest): Promise<BookCopy> {
-    const { data } = await httpClient.put<BookCopy>(`/book-copies/${copyId}`, payload);
+    const { data } = await httpClient.put<BookCopy>(ENDPOINTS.bookCopies.byId(copyId), payload);
     return data;
   },
 
   async remove(copyId: string): Promise<void> {
-    await httpClient.delete(`/book-copies/${copyId}`);
+    await httpClient.delete(ENDPOINTS.bookCopies.byId(copyId));
   },
 };

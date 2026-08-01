@@ -1,4 +1,5 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 import type { Page } from '@/types/api';
 
 import type { Book, BookRequest, ListBooksParams } from '../types/book.types';
@@ -13,7 +14,7 @@ function nonEmpty(value: string | undefined): string | undefined {
 
 export const bookService = {
   async list(params: ListBooksParams): Promise<Page<Book>> {
-    const { data } = await httpClient.get<Page<Book>>('/books', {
+    const { data } = await httpClient.get<Page<Book>>(ENDPOINTS.books.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -30,27 +31,27 @@ export const bookService = {
   },
 
   async get(bookId: string): Promise<Book> {
-    const { data } = await httpClient.get<Book>(`/books/${bookId}`);
+    const { data } = await httpClient.get<Book>(ENDPOINTS.books.byId(bookId));
     return data;
   },
 
   async create(payload: BookRequest): Promise<Book> {
-    const { data } = await httpClient.post<Book>('/books', payload);
+    const { data } = await httpClient.post<Book>(ENDPOINTS.books.list, payload);
     return data;
   },
 
   async update(bookId: string, payload: BookRequest): Promise<Book> {
-    const { data } = await httpClient.put<Book>(`/books/${bookId}`, payload);
+    const { data } = await httpClient.put<Book>(ENDPOINTS.books.byId(bookId), payload);
     return data;
   },
 
   async archive(bookId: string): Promise<Book> {
-    const { data } = await httpClient.post<Book>(`/books/${bookId}/archive`);
+    const { data } = await httpClient.post<Book>(ENDPOINTS.books.archive(bookId));
     return data;
   },
 
   async unarchive(bookId: string): Promise<Book> {
-    const { data } = await httpClient.post<Book>(`/books/${bookId}/unarchive`);
+    const { data } = await httpClient.post<Book>(ENDPOINTS.books.unarchive(bookId));
     return data;
   },
 };

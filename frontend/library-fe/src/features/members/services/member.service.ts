@@ -1,4 +1,5 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 import type { Page } from '@/types/api';
 
 import type { ListMembersParams, Member, MemberRequest } from '../types/member.types';
@@ -13,7 +14,7 @@ function nonEmpty(value: string | undefined): string | undefined {
 
 export const memberService = {
   async list(params: ListMembersParams): Promise<Page<Member>> {
-    const { data } = await httpClient.get<Page<Member>>('/members', {
+    const { data } = await httpClient.get<Page<Member>>(ENDPOINTS.members.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -28,21 +29,21 @@ export const memberService = {
   },
 
   async get(memberId: string): Promise<Member> {
-    const { data } = await httpClient.get<Member>(`/members/${memberId}`);
+    const { data } = await httpClient.get<Member>(ENDPOINTS.members.byId(memberId));
     return data;
   },
 
   async create(payload: MemberRequest): Promise<Member> {
-    const { data } = await httpClient.post<Member>('/members', payload);
+    const { data } = await httpClient.post<Member>(ENDPOINTS.members.list, payload);
     return data;
   },
 
   async update(memberId: string, payload: MemberRequest): Promise<Member> {
-    const { data } = await httpClient.put<Member>(`/members/${memberId}`, payload);
+    const { data } = await httpClient.put<Member>(ENDPOINTS.members.byId(memberId), payload);
     return data;
   },
 
   async remove(memberId: string): Promise<void> {
-    await httpClient.delete(`/members/${memberId}`);
+    await httpClient.delete(ENDPOINTS.members.byId(memberId));
   },
 };

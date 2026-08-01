@@ -1,4 +1,5 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 import type { Page } from '@/types/api';
 
 import type {
@@ -18,7 +19,7 @@ function nonEmpty(value: string | undefined): string | undefined {
 
 export const staffService = {
   async list(params: ListStaffParams): Promise<Page<Staff>> {
-    const { data } = await httpClient.get<Page<Staff>>('/staff', {
+    const { data } = await httpClient.get<Page<Staff>>(ENDPOINTS.staff.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
@@ -33,22 +34,22 @@ export const staffService = {
   },
 
   async create(payload: StaffCreateRequest): Promise<Staff> {
-    const { data } = await httpClient.post<Staff>('/staff', payload);
+    const { data } = await httpClient.post<Staff>(ENDPOINTS.staff.list, payload);
     return data;
   },
 
   async update(staffId: string, payload: StaffUpdateRequest): Promise<Staff> {
-    const { data } = await httpClient.put<Staff>(`/staff/${staffId}`, payload);
+    const { data } = await httpClient.put<Staff>(ENDPOINTS.staff.byId(staffId), payload);
     return data;
   },
 
   async activate(staffId: string): Promise<Staff> {
-    const { data } = await httpClient.post<Staff>(`/staff/${staffId}/activate`);
+    const { data } = await httpClient.post<Staff>(ENDPOINTS.staff.activate(staffId));
     return data;
   },
 
   async deactivate(staffId: string): Promise<Staff> {
-    const { data } = await httpClient.post<Staff>(`/staff/${staffId}/deactivate`);
+    const { data } = await httpClient.post<Staff>(ENDPOINTS.staff.deactivate(staffId));
     return data;
   },
 };
