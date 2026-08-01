@@ -253,6 +253,8 @@ class LoanService:
         self,
         as_of: datetime | None = None,
         *,
+        member_name: str | None = None,
+        book_title: str | None = None,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
@@ -262,8 +264,28 @@ class LoanService:
         estimated fine. Copy is eager-loaded: late_fee_per_day is needed per
         row and the relationship is lazy="raise"."""
         as_of = as_of or datetime.now(UTC)
+        filters: list[ColumnElement[bool]] = [Loan.status == LoanStatus.ACTIVE, Loan.due_at < as_of]
+        needs_copy_join = bool(book_title)
+        needs_book_join = bool(book_title)
+        needs_member_join = bool(member_name)
+
+        if member_name:
+            pattern = f"%{member_name}%"
+            filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
+        if book_title:
+            filters.append(Book.title.ilike(f"%{book_title}%"))
+
+        joins: list[InstrumentedAttribute[Any]] = []
+        if needs_copy_join:
+            joins.append(Loan.copy)
+        if needs_book_join:
+            joins.append(BookCopy.book)
+        if needs_member_join:
+            joins.append(Loan.member)
+
         loans, total = await self.repository.list_paginated(
-            filters=[Loan.status == LoanStatus.ACTIVE, Loan.due_at < as_of],
+            filters=filters,
+            joins=joins,
             options=[selectinload(Loan.copy)],
             sort_by=sort_by,
             sort_dir=sort_dir,

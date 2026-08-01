@@ -62,6 +62,8 @@ export interface OverdueLoan extends Loan {
 export interface ListOverdueLoansParams {
   skip: number;
   limit: number;
+  memberName?: string;
+  bookTitle?: string;
   sortBy: LoanSortField;
   sortDir: SortDir;
 }

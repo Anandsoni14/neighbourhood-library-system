@@ -27,6 +27,16 @@ const authenticatedState = {
   },
 };
 
+function findRow(text: string) {
+  return screen.findByText(text).then((cell) => {
+    const row = cell.closest('[role="row"]');
+    if (!row) {
+      throw new Error(`Expected a DataGrid row containing "${text}"`);
+    }
+    return row as HTMLElement;
+  });
+}
+
 describe('DashboardPage', () => {
   it('renders the page heading', () => {
     render(<DashboardPage />);
@@ -55,24 +65,64 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/The Pragmatic Programmer \(BC-002\)/)).toBeVisible();
   });
 
+  it('filters overdue loans by member, reflecting the filter in the URL', async () => {
+    render(<DashboardPage />, { initialEntries: ['/dashboard?member=Ada'] });
+
+    expect(await screen.findByText('Ada Lovelace')).toBeVisible();
+  });
+
+  it('shows an empty state when the member filter matches nothing', async () => {
+    render(<DashboardPage />, { initialEntries: ['/dashboard?member=no+such+member'] });
+
+    expect(await screen.findByText(/no rows/i)).toBeVisible();
+  });
+
+  it('filters overdue loans by book title', async () => {
+    render(<DashboardPage />, { initialEntries: ['/dashboard?book=Pragmatic'] });
+
+    expect(await screen.findByText('Ada Lovelace')).toBeVisible();
+  });
+
+  it('opens the member history dialog when the Member cell is clicked', async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage />);
+    const row = await findRow('Ada Lovelace');
+
+    await user.click(within(row).getByText('Ada Lovelace'));
+
+    expect(await screen.findByRole('heading', { name: /borrow history/i })).toBeVisible();
+  });
+
+  it('opens the book copies dialog when the Book cell is clicked', async () => {
+    const user = userEvent.setup();
+    render(<DashboardPage />);
+    const row = await findRow('Ada Lovelace');
+
+    await user.click(within(row).getByText(/The Pragmatic Programmer/));
+
+    expect(
+      await screen.findByRole('heading', { name: /copies.*pragmatic programmer/i }),
+    ).toBeVisible();
+  });
+
   it('returns an overdue loan and shows the resulting fine', async () => {
     const user = userEvent.setup();
     render(<DashboardPage />);
-    await screen.findByText('Ada Lovelace');
+    const row = await findRow('Ada Lovelace');
 
-    await user.click(screen.getByRole('button', { name: /return loan/i }));
+    await user.click(within(row).getByRole('menuitem', { name: /return loan/i }));
     const dialog = screen.getByRole('dialog');
     await user.click(within(dialog).getByLabelText(/return condition/i));
     await user.click(screen.getByRole('option', { name: 'Good' }));
     await user.click(within(dialog).getByRole('button', { name: 'Return' }));
 
     await waitFor(() => {
-      expect(screen.getByText('No overdue loans.')).toBeVisible();
+      expect(screen.getByText(/no rows/i)).toBeVisible();
     });
     expect(await screen.findByText(/Loan returned\. Fine: \$/)).toBeVisible();
   });
 
-  it('shows a server error message when the dashboard fails to load', async () => {
+  it('shows a server error message when the overdue loans list fails to load', async () => {
     server.use(
       http.get(`${API_ORIGIN}/loans/overdue`, () =>
         HttpResponse.json({ detail: 'Something went wrong' }, { status: 500 }),

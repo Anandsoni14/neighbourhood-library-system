@@ -3,6 +3,7 @@ import { useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '@/redux/hooks';
 import {
   fetchLoans as fetchLoansThunk,
+  fetchOverdueLoans as fetchOverdueLoansThunk,
   issueLoan as issueLoanThunk,
   resetMutationStatus,
   returnLoan as returnLoanThunk,
@@ -12,10 +13,19 @@ import {
   selectLoansMutationStatus,
   selectLoansStatus,
   selectLoansTotal,
+  selectOverdueLoans,
+  selectOverdueLoansError,
+  selectOverdueLoansStatus,
+  selectOverdueLoansTotal,
 } from '@/redux/slices/loansSlice';
 import { RequestStatus } from '@/types/common';
 
-import type { ListLoansParams, LoanIssueRequest, LoanReturnRequest } from '../types/loan.types';
+import type {
+  ListLoansParams,
+  ListOverdueLoansParams,
+  LoanIssueRequest,
+  LoanReturnRequest,
+} from '../types/loan.types';
 
 /**
  * The seam between the circulation-desk UI (LoansPage, IssueLoanDialog,
@@ -29,9 +39,18 @@ export function useLoans() {
   const error = useAppSelector(selectLoansError);
   const mutationStatus = useAppSelector(selectLoansMutationStatus);
   const mutationError = useAppSelector(selectLoansMutationError);
+  const overdueItems = useAppSelector(selectOverdueLoans);
+  const overdueTotal = useAppSelector(selectOverdueLoansTotal);
+  const overdueStatus = useAppSelector(selectOverdueLoansStatus);
+  const overdueError = useAppSelector(selectOverdueLoansError);
 
   const fetchLoans = useCallback(
     (params: ListLoansParams) => dispatch(fetchLoansThunk(params)),
+    [dispatch],
+  );
+
+  const fetchOverdueLoans = useCallback(
+    (params: ListOverdueLoansParams) => dispatch(fetchOverdueLoansThunk(params)),
     [dispatch],
   );
 
@@ -58,5 +77,10 @@ export function useLoans() {
     issueLoan,
     returnLoan,
     clearMutationError,
+    overdueItems,
+    overdueTotal,
+    overdueError,
+    isOverdueLoading: overdueStatus === RequestStatus.LOADING,
+    fetchOverdueLoans,
   };
 }

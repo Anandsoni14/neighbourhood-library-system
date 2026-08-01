@@ -2,7 +2,6 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
 import { bookService } from '@/features/books/services/book.service';
 import { loanService } from '@/features/loans/services/loan.service';
-import type { ListOverdueLoansParams, OverdueLoan } from '@/features/loans/types/loan.types';
 import { memberService } from '@/features/members/services/member.service';
 import type { RootState } from '@/redux/store';
 import { LoanStatus } from '@/types/api';
@@ -18,8 +17,6 @@ interface DashboardCounts {
 
 interface DashboardState {
   counts: DashboardCounts | null;
-  overdueItems: OverdueLoan[];
-  overdueTotal: number;
   status: RequestStatus;
   error: string | null;
   /** See booksSlice's identical field for the stale-response rationale. */
@@ -28,8 +25,6 @@ interface DashboardState {
 
 const initialState: DashboardState = {
   counts: null,
-  overdueItems: [],
-  overdueTotal: 0,
   status: RequestStatus.IDLE,
   error: null,
   latestRequestId: null,
@@ -38,41 +33,39 @@ const initialState: DashboardState = {
 /**
  * A single count-fetching round trip per entity, piggybacking on each list
  * endpoint's `total` field (a `limit: 1` page) rather than adding dedicated
- * count endpoints the backend doesn't have.
+ * count endpoints the backend doesn't have. Takes no filter/pagination
+ * params — the overdue-loans list widget on the dashboard fetches its own
+ * (filterable, paginated) data via loansSlice's fetchOverdueLoans, so this
+ * count can't be corrupted by whatever the widget is currently filtered to.
  */
-export const fetchDashboard = createAsyncThunk<
-  { counts: DashboardCounts; overdueItems: OverdueLoan[]; overdueTotal: number },
-  ListOverdueLoansParams,
-  { rejectValue: string }
->('dashboard/fetchDashboard', async (overdueParams, { rejectWithValue }) => {
-  try {
-    const [booksPage, membersPage, activeLoansPage, overduePage] = await Promise.all([
-      bookService.list({ skip: 0, limit: 1, sortBy: 'title', sortDir: 'asc' }),
-      memberService.list({ skip: 0, limit: 1, sortBy: 'last_name', sortDir: 'asc' }),
-      loanService.list({
-        skip: 0,
-        limit: 1,
-        status: LoanStatus.ACTIVE,
-        sortBy: 'borrowed_at',
-        sortDir: 'desc',
-      }),
-      loanService.overdue(overdueParams),
-    ]);
+export const fetchDashboard = createAsyncThunk<DashboardCounts, void, { rejectValue: string }>(
+  'dashboard/fetchDashboard',
+  async (_arg, { rejectWithValue }) => {
+    try {
+      const [booksPage, membersPage, activeLoansPage, overduePage] = await Promise.all([
+        bookService.list({ skip: 0, limit: 1, sortBy: 'title', sortDir: 'asc' }),
+        memberService.list({ skip: 0, limit: 1, sortBy: 'last_name', sortDir: 'asc' }),
+        loanService.list({
+          skip: 0,
+          limit: 1,
+          status: LoanStatus.ACTIVE,
+          sortBy: 'borrowed_at',
+          sortDir: 'desc',
+        }),
+        loanService.overdue({ skip: 0, limit: 1, sortBy: 'due_at', sortDir: 'asc' }),
+      ]);
 
-    return {
-      counts: {
+      return {
         books: booksPage.total,
         members: membersPage.total,
         activeLoans: activeLoansPage.total,
         overdueLoans: overduePage.total,
-      },
-      overdueItems: overduePage.items,
-      overdueTotal: overduePage.total,
-    };
-  } catch (error) {
-    return rejectWithValue(getApiErrorMessage(error, 'Unable to load the dashboard.'));
-  }
-});
+      };
+    } catch (error) {
+      return rejectWithValue(getApiErrorMessage(error, 'Unable to load the dashboard.'));
+    }
+  },
+);
 
 const dashboardSlice = createSlice({
   name: 'dashboard',
@@ -90,9 +83,7 @@ const dashboardSlice = createSlice({
           return;
         }
         state.status = RequestStatus.SUCCEEDED;
-        state.counts = action.payload.counts;
-        state.overdueItems = action.payload.overdueItems;
-        state.overdueTotal = action.payload.overdueTotal;
+        state.counts = action.payload;
       })
       .addCase(fetchDashboard.rejected, (state, action) => {
         if (action.meta.requestId !== state.latestRequestId) {
@@ -108,9 +99,5 @@ export default dashboardSlice.reducer;
 
 export const selectDashboardCounts = (state: RootState): DashboardCounts | null =>
   state.dashboard.counts;
-export const selectDashboardOverdueItems = (state: RootState): OverdueLoan[] =>
-  state.dashboard.overdueItems;
-export const selectDashboardOverdueTotal = (state: RootState): number =>
-  state.dashboard.overdueTotal;
 export const selectDashboardStatus = (state: RootState): RequestStatus => state.dashboard.status;
 export const selectDashboardError = (state: RootState): string | null => state.dashboard.error;

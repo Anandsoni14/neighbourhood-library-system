@@ -647,10 +647,25 @@ export const handlers = [
     const limit = Number(url.searchParams.get('limit') ?? '100');
     const sortBy = (url.searchParams.get('sort_by') ?? 'due_at') as keyof (typeof loans)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
+    const memberName = url.searchParams.get('member_name');
+    const bookTitle = url.searchParams.get('book_title');
     const now = new Date();
 
     const overdue = loans
-      .filter((loan) => loan.status === 'ACTIVE' && new Date(loan.due_at) < now)
+      .filter((loan) => {
+        if (loan.status !== 'ACTIVE' || !(new Date(loan.due_at) < now)) {
+          return false;
+        }
+        const copy = copies.find((candidate) => candidate.copy_id === loan.copy_id);
+        const book = copy ? books.find((candidate) => candidate.book_id === copy.book_id) : undefined;
+        const member = members.find((candidate) => candidate.member_id === loan.member_id);
+        return (
+          (memberName
+            ? matches(member?.first_name ?? null, memberName) ||
+              matches(member?.last_name ?? null, memberName)
+            : true) && matches(book?.title ?? null, bookTitle)
+        );
+      })
       .map((loan) => {
         const copy = copies.find((candidate) => candidate.copy_id === loan.copy_id);
         const daysOverdue = Math.ceil(

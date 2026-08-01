@@ -69,6 +69,27 @@ describe('useLoans', () => {
     expect(result.current.total).toBe(1);
   });
 
+  it('fetches overdue loans independently of the main loans list', async () => {
+    const overdueLoan = { ...loan, days_overdue: 3, estimated_fine: 15 };
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [overdueLoan], total: 1 });
+
+    const store = setupStore();
+    const { result } = renderHook(() => useLoans(), { wrapper: wrapperFor(store) });
+
+    await result.current.fetchOverdueLoans({
+      skip: 0,
+      limit: 25,
+      sortBy: LoanSortField.DUE_AT,
+      sortDir: 'asc',
+    });
+
+    await waitFor(() => {
+      expect(result.current.overdueItems).toEqual([overdueLoan]);
+    });
+    expect(result.current.overdueTotal).toBe(1);
+    expect(result.current.loans).toEqual([]);
+  });
+
   it('issues a loan and reports the mutation as no longer in flight', async () => {
     vi.mocked(httpClient.post).mockResolvedValue(loan);
 

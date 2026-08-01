@@ -42,6 +42,8 @@ export const loanService = {
       params: {
         skip: params.skip,
         limit: params.limit,
+        member_name: nonEmpty(params.memberName),
+        book_title: nonEmpty(params.bookTitle),
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },

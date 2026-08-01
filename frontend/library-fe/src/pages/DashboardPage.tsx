@@ -9,33 +9,38 @@ import Card from '@mui/material/Card';
 import CardActionArea from '@mui/material/CardActionArea';
 import CardContent from '@mui/material/CardContent';
 import Grid from '@mui/material/Grid';
-import IconButton from '@mui/material/IconButton';
-import LinearProgress from '@mui/material/LinearProgress';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
-import TableRow from '@mui/material/TableRow';
-import TableSortLabel from '@mui/material/TableSortLabel';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import {
+  GridActionsCellItem,
+  type GridCellParams,
+  type GridColDef,
+  type GridFilterModel,
+  type GridRowParams,
+  type GridSortModel,
+} from '@mui/x-data-grid';
 import type { ReactElement } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
+import { DataTable } from '@/components/DataTable';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import type { Book } from '@/features/books/types/book.types';
+import { BookCopiesDialog } from '@/features/copies/components/BookCopiesDialog';
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
+import { MemberLoanHistoryDialog } from '@/features/loans/components/MemberLoanHistoryDialog';
 import { ReturnLoanDialog } from '@/features/loans/components/ReturnLoanDialog';
 import { useLoanEnrichment } from '@/features/loans/hooks/useLoanEnrichment';
 import { useLoans } from '@/features/loans/hooks/useLoans';
 import { LoanSortField } from '@/features/loans/types/loan.types';
 import type { LoanReturnRequest, OverdueLoan } from '@/features/loans/types/loan.types';
+import type { Member } from '@/features/members/types/member.types';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { SortDir } from '@/types/common';
+import { containsOnlyOperators, filtersFromFilterModel } from '@/utils/gridFilterOperators';
 
 interface SummaryCard {
   label: string;
@@ -44,15 +49,9 @@ interface SummaryCard {
   to: string;
 }
 
-interface SortableColumn {
-  field: LoanSortField;
-  label: string;
-}
+type Filters = Record<'member' | 'book', string>;
 
-const columns: SortableColumn[] = [
-  { field: LoanSortField.DUE_AT, label: 'Due at' },
-  { field: LoanSortField.BORROWED_AT, label: 'Borrowed at' },
-];
+const emptyFilters: Filters = { member: '', book: '' };
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleString();
@@ -62,37 +61,66 @@ export function DashboardPage() {
   useDocumentTitle('Dashboard');
 
   const { staff } = useAuth();
-  const { counts, overdueItems, overdueTotal, error, isLoading, fetchDashboard } = useDashboard();
+  const { counts, error, isLoading, fetchDashboard } = useDashboard();
+  const {
+    overdueItems,
+    overdueTotal,
+    overdueError,
+    isOverdueLoading,
+    fetchOverdueLoans,
+    returnLoan,
+    isMutating,
+    mutationError,
+    clearMutationError,
+  } = useLoans();
   const { members, copies, books } = useLoanEnrichment(overdueItems);
-  const { returnLoan, isMutating, mutationError, clearMutationError } = useLoans();
 
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [sortBy, setSortBy] = useState<LoanSortField>(LoanSortField.DUE_AT);
-  const [sortDir, setSortDir] = useState<SortDir>(SortDir.ASC);
+  const {
+    filters,
+    debouncedFilters,
+    setFilters,
+    page,
+    pageSize,
+    setPagination,
+    sortField,
+    sortDir,
+    setSort,
+  } = useTableQueryParams<Filters>({
+    defaultFilters: emptyFilters,
+    defaultSortField: LoanSortField.DUE_AT,
+  });
 
   const [returningLoan, setReturningLoan] = useState<OverdueLoan | null>(null);
   const [returnKey, setReturnKey] = useState(0);
   const [justReturnedFine, setJustReturnedFine] = useState<number | null>(null);
+  const [viewingMember, setViewingMember] = useState<Member | null>(null);
+  const [viewingBook, setViewingBook] = useState<Book | null>(null);
 
-  useEffect(() => {
-    void fetchDashboard({ skip: page * rowsPerPage, limit: rowsPerPage, sortBy, sortDir });
-    // fetchDashboard is a stable dispatch wrapper; including it would just add noise.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, sortBy, sortDir]);
-
-  const refetch = () => {
-    void fetchDashboard({ skip: page * rowsPerPage, limit: rowsPerPage, sortBy, sortDir });
+  const overdueParams = {
+    skip: page * pageSize,
+    limit: pageSize,
+    memberName: debouncedFilters.member || undefined,
+    bookTitle: debouncedFilters.book || undefined,
+    sortBy: sortField as LoanSortField,
+    sortDir,
   };
 
-  const handleSort = (field: LoanSortField) => {
-    if (field === sortBy) {
-      setSortDir(sortDir === SortDir.ASC ? SortDir.DESC : SortDir.ASC);
-    } else {
-      setSortBy(field);
-      setSortDir(SortDir.ASC);
-    }
-    setPage(0);
+  useEffect(() => {
+    void fetchDashboard();
+    // Fetched once on mount; the overdue-loans count here is independent of
+    // whatever the widget below is currently filtered/paged to.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    void fetchOverdueLoans(overdueParams);
+    // fetchOverdueLoans is a stable dispatch wrapper; including it would just add noise.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, sortField, sortDir, debouncedFilters]);
+
+  const refetch = () => {
+    void fetchOverdueLoans(overdueParams);
+    void fetchDashboard();
   };
 
   const openReturnDialog = (loan: OverdueLoan) => {
@@ -117,6 +145,121 @@ export function DashboardPage() {
       refetch();
     }
   };
+
+  const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
+    items: (Object.keys(filters) as (keyof Filters)[])
+      .filter((key) => filters[key])
+      .map((key) => ({ field: key, operator: 'contains', value: filters[key] })),
+  }));
+
+  const handleFilterModelChange = (model: GridFilterModel) => {
+    setFilterModel(model);
+    setFilters(filtersFromFilterModel(model, emptyFilters));
+  };
+
+  const handleSortModelChange = (model: GridSortModel) => {
+    const item = model[0];
+    if (item?.sort) {
+      setSort(item.field, item.sort === 'desc' ? SortDir.DESC : SortDir.ASC);
+    }
+  };
+
+  const handleCellClick = (params: GridCellParams<OverdueLoan>) => {
+    if (params.field === 'member') {
+      const member = members[params.row.member_id];
+      if (member) {
+        setViewingMember(member);
+      }
+      return;
+    }
+    if (params.field === 'book') {
+      const copy = copies[params.row.copy_id];
+      const book = copy ? books[copy.book_id] : undefined;
+      if (book) {
+        setViewingBook(book);
+      }
+    }
+  };
+
+  const paginationModel = useMemo(() => ({ page, pageSize }), [page, pageSize]);
+  const sortModel: GridSortModel = useMemo(
+    () => [{ field: sortField, sort: sortDir }],
+    [sortField, sortDir],
+  );
+
+  // Not memoized: closes over render-scoped state (members, copies, books)
+  // that would all need to be deps anyway; recomputing this small array each
+  // render is cheap and avoids stale-closure bugs.
+  const columns: GridColDef<OverdueLoan>[] = [
+    {
+      field: 'member',
+      headerName: 'Member',
+      flex: 1,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => {
+        const member = members[row.member_id];
+        return member ? `${member.first_name} ${member.last_name}` : '…';
+      },
+    },
+    {
+      field: 'book',
+      headerName: 'Book',
+      flex: 1,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => {
+        const copy = copies[row.copy_id];
+        const book = copy ? books[copy.book_id] : undefined;
+        return copy ? `${book ? book.title : '…'} (${copy.barcode})` : '…';
+      },
+    },
+    {
+      field: 'due_at',
+      headerName: 'Due at',
+      flex: 1,
+      filterable: false,
+      valueGetter: (_value, row) => formatDate(row.due_at),
+    },
+    {
+      field: 'borrowed_at',
+      headerName: 'Borrowed at',
+      flex: 1,
+      filterable: false,
+      valueGetter: (_value, row) => formatDate(row.borrowed_at),
+    },
+    {
+      field: 'days_overdue',
+      headerName: 'Days overdue',
+      width: 130,
+      sortable: false,
+      filterable: false,
+    },
+    {
+      field: 'estimated_fine',
+      headerName: 'Estimated fine',
+      width: 130,
+      sortable: false,
+      filterable: false,
+      valueGetter: (_value, row) => Number(row.estimated_fine).toFixed(2),
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 80,
+      getActions: (params: GridRowParams<OverdueLoan>) => [
+        <Tooltip key="return" title={`Return loan ${params.row.loan_id}`}>
+          <GridActionsCellItem
+            icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
+            label={`Return loan ${params.row.loan_id}`}
+            onClick={() => openReturnDialog(params.row)}
+            showInMenu={false}
+          />
+        </Tooltip>,
+      ],
+    },
+  ];
 
   const summaryCards: SummaryCard[] = [
     { label: 'Books', value: counts?.books ?? 0, icon: <AutoStoriesOutlinedIcon />, to: '/books' },
@@ -172,88 +315,33 @@ export function DashboardPage() {
         Overdue loans
       </Typography>
 
-      {error && (
+      {(error ?? overdueError) && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          {error ?? overdueError}
         </Alert>
       )}
 
-      <Paper>
-        {isLoading && <LinearProgress />}
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Member</TableCell>
-                <TableCell>Book</TableCell>
-                {columns.map((column) => (
-                  <TableCell key={column.field}>
-                    <TableSortLabel
-                      active={sortBy === column.field}
-                      direction={sortBy === column.field ? sortDir : SortDir.ASC}
-                      onClick={() => handleSort(column.field)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-                <TableCell>Days overdue</TableCell>
-                <TableCell>Estimated fine</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {overdueItems.length === 0 && !isLoading && (
-                <TableRow>
-                  <TableCell colSpan={columns.length + 5} align="center">
-                    No overdue loans.
-                  </TableCell>
-                </TableRow>
-              )}
-              {overdueItems.map((loan) => {
-                const member = members[loan.member_id];
-                const copy = copies[loan.copy_id];
-                const book = copy ? books[copy.book_id] : undefined;
-                return (
-                  <TableRow key={loan.loan_id} hover>
-                    <TableCell>
-                      {member ? `${member.first_name} ${member.last_name}` : '…'}
-                    </TableCell>
-                    <TableCell>
-                      {copy ? `${book ? book.title : '…'} (${copy.barcode})` : '…'}
-                    </TableCell>
-                    <TableCell>{formatDate(loan.due_at)}</TableCell>
-                    <TableCell>{formatDate(loan.borrowed_at)}</TableCell>
-                    <TableCell>{loan.days_overdue}</TableCell>
-                    <TableCell>{Number(loan.estimated_fine).toFixed(2)}</TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        aria-label={`Return loan ${loan.loan_id}`}
-                        onClick={() => openReturnDialog(loan)}
-                      >
-                        <AssignmentReturnOutlinedIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={overdueTotal}
-          page={page}
-          onPageChange={(_event, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => {
-            setRowsPerPage(Number(event.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
-      </Paper>
+      <DataTable
+        columns={columns}
+        rows={overdueItems}
+        getRowId={(row: OverdueLoan) => row.loan_id}
+        rowCount={overdueTotal}
+        loading={isLoading || isOverdueLoading}
+        autoHeight
+        paginationModel={paginationModel}
+        onPaginationModelChange={(model) => setPagination(model.page, model.pageSize)}
+        sortModel={sortModel}
+        onSortModelChange={handleSortModelChange}
+        filterModel={filterModel}
+        onFilterModelChange={handleFilterModelChange}
+        onCellClick={handleCellClick}
+        sx={{
+          '& [data-field="member"], & [data-field="book"]': { cursor: 'pointer' },
+          '& [data-field="member"]:hover, & [data-field="book"]:hover': {
+            textDecoration: 'underline',
+          },
+        }}
+      />
 
       <ReturnLoanDialog
         key={`return-${returnKey}`}
@@ -263,6 +351,18 @@ export function DashboardPage() {
         error={mutationError}
         onClose={closeReturnDialog}
         onSubmit={(payload) => void handleReturnSubmit(payload)}
+      />
+
+      <MemberLoanHistoryDialog
+        open={viewingMember !== null}
+        member={viewingMember}
+        onClose={() => setViewingMember(null)}
+      />
+
+      <BookCopiesDialog
+        open={viewingBook !== null}
+        book={viewingBook}
+        onClose={() => setViewingBook(null)}
       />
 
       <FeedbackSnackbar

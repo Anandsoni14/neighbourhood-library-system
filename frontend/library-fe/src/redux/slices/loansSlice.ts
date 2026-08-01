@@ -3,9 +3,11 @@ import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import { loanService } from '@/features/loans/services/loan.service';
 import type {
   ListLoansParams,
+  ListOverdueLoansParams,
   Loan,
   LoanIssueRequest,
   LoanReturnRequest,
+  OverdueLoan,
 } from '@/features/loans/types/loan.types';
 import type { RootState } from '@/redux/store';
 import { RequestStatus } from '@/types/common';
@@ -20,6 +22,11 @@ interface LoansState {
   mutationError: string | null;
   /** See booksSlice's identical field for the stale-response rationale. */
   latestRequestId: string | null;
+  overdueItems: OverdueLoan[];
+  overdueTotal: number;
+  overdueStatus: RequestStatus;
+  overdueError: string | null;
+  latestOverdueRequestId: string | null;
 }
 
 const initialState: LoansState = {
@@ -30,6 +37,11 @@ const initialState: LoansState = {
   mutationStatus: RequestStatus.IDLE,
   mutationError: null,
   latestRequestId: null,
+  overdueItems: [],
+  overdueTotal: 0,
+  overdueStatus: RequestStatus.IDLE,
+  overdueError: null,
+  latestOverdueRequestId: null,
 };
 
 export const fetchLoans = createAsyncThunk<
@@ -41,6 +53,20 @@ export const fetchLoans = createAsyncThunk<
     return await loanService.list(params);
   } catch (error) {
     return rejectWithValue(getApiErrorMessage(error, 'Unable to load loans.'));
+  }
+});
+
+/** Independent of fetchLoans so a paginated/filtered overdue-list view (e.g. the
+ * dashboard widget) never touches the main Loans page's own list state. */
+export const fetchOverdueLoans = createAsyncThunk<
+  { items: OverdueLoan[]; total: number },
+  ListOverdueLoansParams,
+  { rejectValue: string }
+>('loans/fetchOverdueLoans', async (params, { rejectWithValue }) => {
+  try {
+    return await loanService.overdue(params);
+  } catch (error) {
+    return rejectWithValue(getApiErrorMessage(error, 'Unable to load overdue loans.'));
   }
 });
 
@@ -98,6 +124,26 @@ const loansSlice = createSlice({
         state.status = RequestStatus.FAILED;
         state.error = action.payload ?? 'Unable to load loans.';
       })
+      .addCase(fetchOverdueLoans.pending, (state, action) => {
+        state.overdueStatus = RequestStatus.LOADING;
+        state.overdueError = null;
+        state.latestOverdueRequestId = action.meta.requestId;
+      })
+      .addCase(fetchOverdueLoans.fulfilled, (state, action) => {
+        if (action.meta.requestId !== state.latestOverdueRequestId) {
+          return;
+        }
+        state.overdueStatus = RequestStatus.SUCCEEDED;
+        state.overdueItems = action.payload.items;
+        state.overdueTotal = action.payload.total;
+      })
+      .addCase(fetchOverdueLoans.rejected, (state, action) => {
+        if (action.meta.requestId !== state.latestOverdueRequestId) {
+          return;
+        }
+        state.overdueStatus = RequestStatus.FAILED;
+        state.overdueError = action.payload ?? 'Unable to load overdue loans.';
+      })
       .addCase(issueLoan.pending, (state) => {
         state.mutationStatus = RequestStatus.LOADING;
         state.mutationError = null;
@@ -134,3 +180,9 @@ export const selectLoansMutationStatus = (state: RootState): RequestStatus =>
   state.loans.mutationStatus;
 export const selectLoansMutationError = (state: RootState): string | null =>
   state.loans.mutationError;
+export const selectOverdueLoans = (state: RootState): OverdueLoan[] => state.loans.overdueItems;
+export const selectOverdueLoansTotal = (state: RootState): number => state.loans.overdueTotal;
+export const selectOverdueLoansStatus = (state: RootState): RequestStatus =>
+  state.loans.overdueStatus;
+export const selectOverdueLoansError = (state: RootState): string | null =>
+  state.loans.overdueError;

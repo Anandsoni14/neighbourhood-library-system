@@ -149,6 +149,8 @@ async def list_loans(
 @router.get("/overdue", response_model=Page[OverdueLoanResponse])
 async def list_overdue_loans(
     pagination: PaginationParams = Depends(),
+    member_name: str | None = Query(None, description="Matches first or last name."),
+    book_title: str | None = Query(None, description="Case-insensitive substring match."),
     sort_by: LoanSortField = Query(LoanSortField.DUE_AT),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
@@ -160,6 +162,8 @@ async def list_overdue_loans(
     """
     service = LoanService(db)
     overdue, total = await service.get_overdue_loans(
+        member_name=member_name,
+        book_title=book_title,
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
