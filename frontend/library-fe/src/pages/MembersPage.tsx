@@ -5,52 +5,45 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import FormControl from '@mui/material/FormControl';
-import IconButton from '@mui/material/IconButton';
-import InputLabel from '@mui/material/InputLabel';
-import LinearProgress from '@mui/material/LinearProgress';
-import MenuItem from '@mui/material/MenuItem';
-import Paper from '@mui/material/Paper';
-import Select, { type SelectChangeEvent } from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
-import TableRow from '@mui/material/TableRow';
-import TableSortLabel from '@mui/material/TableSortLabel';
-import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { type ChangeEvent, useEffect, useState } from 'react';
+import {
+  GridActionsCellItem,
+  type GridColDef,
+  type GridFilterModel,
+  type GridRowParams,
+  type GridSortModel,
+} from '@mui/x-data-grid';
+import { useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { DataTable } from '@/components/DataTable';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { MemberLoanHistoryDialog } from '@/features/loans/components/MemberLoanHistoryDialog';
 import { MemberFormDialog } from '@/features/members/components/MemberFormDialog';
 import { useMembers } from '@/features/members/hooks/useMembers';
 import { MemberSortField } from '@/features/members/types/member.types';
 import type { Member, MemberRequest } from '@/features/members/types/member.types';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { MembershipStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
+import {
+  containsOnlyOperators,
+  equalsOnlyOperators,
+  filtersFromFilterModel,
+} from '@/utils/gridFilterOperators';
 
-/** How long a filter text field must sit idle before it triggers a fetch. */
-const FILTER_DEBOUNCE_MS = 300;
+type Filters = Record<'name' | 'email' | 'phone' | 'status', string>;
 
-interface SortableColumn {
-  field: MemberSortField;
-  label: string;
-}
+const emptyFilters: Filters = { name: '', email: '', phone: '', status: '' };
 
-const columns: SortableColumn[] = [
-  { field: MemberSortField.FIRST_NAME, label: 'First name' },
-  { field: MemberSortField.LAST_NAME, label: 'Last name' },
-  { field: MemberSortField.EMAIL, label: 'Email' },
-  { field: MemberSortField.MEMBERSHIP_STATUS, label: 'Status' },
-];
+// No default filter: MUI Community's filter panel only supports one active
+// filter at a time, so pre-setting Status would block filtering by anything else.
+const defaultFilters: Filters = emptyFilters;
+
+const STATUS_OPTIONS = ['Active', 'Blocked', 'Inactive'];
 
 const statusColors: Record<MembershipStatus, 'success' | 'error' | 'default'> = {
   [MembershipStatus.ACTIVE]: 'success',
@@ -58,13 +51,33 @@ const statusColors: Record<MembershipStatus, 'success' | 'error' | 'default'> = 
   [MembershipStatus.INACTIVE]: 'default',
 };
 
-interface Filters {
-  name: string;
-  email: string;
-  status: MembershipStatus | '';
-}
+// The DataGrid shows one merged "Name" column (the backend's `name` filter
+// already matches first-or-last), sorted by last name — these translate
+// between that column's grid field and the backend's per-field sort params.
+const SORT_FIELD_BY_GRID_FIELD: Record<string, MemberSortField> = {
+  name: MemberSortField.LAST_NAME,
+  email: MemberSortField.EMAIL,
+  status: MemberSortField.MEMBERSHIP_STATUS,
+};
+const GRID_FIELD_BY_SORT_FIELD: Record<string, string> = {
+  [MemberSortField.LAST_NAME]: 'name',
+  [MemberSortField.FIRST_NAME]: 'name',
+  [MemberSortField.EMAIL]: 'email',
+  [MemberSortField.MEMBERSHIP_STATUS]: 'status',
+};
 
-const emptyFilters: Filters = { name: '', email: '', status: '' };
+function statusToMembershipStatus(status: string): MembershipStatus | undefined {
+  if (status === 'Active') {
+    return MembershipStatus.ACTIVE;
+  }
+  if (status === 'Blocked') {
+    return MembershipStatus.BLOCKED;
+  }
+  if (status === 'Inactive') {
+    return MembershipStatus.INACTIVE;
+  }
+  return undefined;
+}
 
 export function MembersPage() {
   useDocumentTitle('Members');
@@ -83,70 +96,45 @@ export function MembersPage() {
     clearMutationError,
   } = useMembers();
 
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
-  // Only the free-text fields are debounced — `status` is a discrete Select
-  // choice, not a per-keystroke value, so it should filter immediately.
-  const debouncedName = useDebouncedValue(filters.name, FILTER_DEBOUNCE_MS);
-  const debouncedEmail = useDebouncedValue(filters.email, FILTER_DEBOUNCE_MS);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [sortBy, setSortBy] = useState<MemberSortField>(MemberSortField.LAST_NAME);
-  const [sortDir, setSortDir] = useState<SortDir>(SortDir.ASC);
+  const {
+    filters,
+    debouncedFilters,
+    setFilters,
+    page,
+    pageSize,
+    setPagination,
+    sortField,
+    sortDir,
+    setSort,
+  } = useTableQueryParams<Filters>({
+    defaultFilters,
+    defaultSortField: MemberSortField.LAST_NAME,
+  });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [deletingMember, setDeletingMember] = useState<Member | null>(null);
   const [historyMember, setHistoryMember] = useState<Member | null>(null);
-  // Bumped on every open so MemberFormDialog remounts (and re-seeds its fields
-  // from `editingMember`) instead of needing an effect to reset its state.
   const [formKey, setFormKey] = useState(0);
 
+  const fetchParams = {
+    skip: page * pageSize,
+    limit: pageSize,
+    name: debouncedFilters.name || undefined,
+    email: debouncedFilters.email || undefined,
+    phoneNumber: debouncedFilters.phone || undefined,
+    status: statusToMembershipStatus(debouncedFilters.status),
+    sortBy: sortField as MemberSortField,
+    sortDir,
+  };
+
   useEffect(() => {
-    void fetchMembers({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      name: debouncedName,
-      email: debouncedEmail,
-      status: filters.status || undefined,
-      sortBy,
-      sortDir,
-    });
+    void fetchMembers(fetchParams);
     // fetchMembers is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, sortBy, sortDir, debouncedName, debouncedEmail, filters.status]);
+  }, [page, pageSize, sortField, sortDir, debouncedFilters]);
 
-  const handleFilterChange =
-    (field: 'name' | 'email') => (event: ChangeEvent<HTMLInputElement>) => {
-      setFilters((prev) => ({ ...prev, [field]: event.target.value }));
-      setPage(0);
-    };
-
-  const handleStatusFilterChange = (event: SelectChangeEvent<MembershipStatus | ''>) => {
-    setFilters((prev) => ({ ...prev, status: event.target.value }));
-    setPage(0);
-  };
-
-  const handleSort = (field: MemberSortField) => {
-    if (field === sortBy) {
-      setSortDir(sortDir === SortDir.ASC ? SortDir.DESC : SortDir.ASC);
-    } else {
-      setSortBy(field);
-      setSortDir(SortDir.ASC);
-    }
-    setPage(0);
-  };
-
-  const refetch = () => {
-    void fetchMembers({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      name: filters.name,
-      email: filters.email,
-      status: filters.status || undefined,
-      sortBy,
-      sortDir,
-    });
-  };
+  const refetch = () => void fetchMembers(fetchParams);
 
   const openAddDialog = () => {
     setEditingMember(null);
@@ -187,6 +175,97 @@ export function MembersPage() {
     }
   };
 
+  const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
+    items: (Object.keys(filters) as (keyof Filters)[])
+      .filter((key) => filters[key])
+      .map((key) => ({
+        field: key,
+        operator: key === 'status' ? 'is' : 'contains',
+        value: filters[key],
+      })),
+  }));
+
+  const handleFilterModelChange = (model: GridFilterModel) => {
+    setFilterModel(model);
+    setFilters(filtersFromFilterModel(model, emptyFilters));
+  };
+
+  const handleSortModelChange = (model: GridSortModel) => {
+    const item = model[0];
+    const backendField = item?.field ? SORT_FIELD_BY_GRID_FIELD[item.field] : undefined;
+    if (item?.sort && backendField) {
+      setSort(backendField, item.sort === 'desc' ? SortDir.DESC : SortDir.ASC);
+    }
+  };
+
+  const paginationModel = useMemo(() => ({ page, pageSize }), [page, pageSize]);
+  const sortModel: GridSortModel = useMemo(
+    () => [{ field: GRID_FIELD_BY_SORT_FIELD[sortField] ?? 'name', sort: sortDir }],
+    [sortField, sortDir],
+  );
+
+  const columns: GridColDef<Member>[] = [
+    {
+      field: 'name',
+      headerName: 'Name',
+      flex: 1,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => `${row.first_name} ${row.last_name}`,
+    },
+    { field: 'email', headerName: 'Email', flex: 1, filterOperators: containsOnlyOperators },
+    {
+      field: 'phone',
+      headerName: 'Phone',
+      flex: 1,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => row.phone_number ?? '—',
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 130,
+      type: 'singleSelect',
+      valueOptions: STATUS_OPTIONS,
+      filterOperators: equalsOnlyOperators,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.row.membership_status}
+          color={statusColors[params.row.membership_status]}
+          variant="outlined"
+        />
+      ),
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 100,
+      getActions: (params: GridRowParams<Member>) => {
+        const name = `${params.row.first_name} ${params.row.last_name}`;
+        return [
+          <Tooltip key="edit" title={`Edit ${name}`}>
+            <GridActionsCellItem
+              icon={<EditOutlinedIcon fontSize="small" />}
+              label={`Edit ${name}`}
+              onClick={() => openEditDialog(params.row)}
+              showInMenu={false}
+            />
+          </Tooltip>,
+          <Tooltip key="delete" title={`Delete ${name}`}>
+            <GridActionsCellItem
+              icon={<DeleteOutlineIcon fontSize="small" />}
+              label={`Delete ${name}`}
+              onClick={() => setDeletingMember(params.row)}
+              showInMenu={false}
+            />
+          </Tooltip>,
+        ];
+      },
+    },
+  ];
+
   return (
     <Box>
       <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -198,131 +277,28 @@ export function MembersPage() {
         </Button>
       </Stack>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <TextField
-            label="Name"
-            value={filters.name}
-            onChange={handleFilterChange('name')}
-            sx={{ minWidth: 180 }}
-          />
-          <TextField
-            label="Email"
-            value={filters.email}
-            onChange={handleFilterChange('email')}
-            sx={{ minWidth: 180 }}
-          />
-          <FormControl sx={{ minWidth: 160 }}>
-            <InputLabel id="status-filter-label">Status</InputLabel>
-            <Select
-              labelId="status-filter-label"
-              label="Status"
-              value={filters.status}
-              onChange={handleStatusFilterChange}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value={MembershipStatus.ACTIVE}>Active</MenuItem>
-              <MenuItem value={MembershipStatus.BLOCKED}>Blocked</MenuItem>
-              <MenuItem value={MembershipStatus.INACTIVE}>Inactive</MenuItem>
-            </Select>
-          </FormControl>
-        </Stack>
-      </Paper>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Paper>
-        {isLoading && <LinearProgress />}
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableCell key={column.field}>
-                    <TableSortLabel
-                      active={sortBy === column.field}
-                      direction={sortBy === column.field ? sortDir : SortDir.ASC}
-                      onClick={() => handleSort(column.field)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-                <TableCell>Phone</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {members.length === 0 && !isLoading && (
-                <TableRow>
-                  <TableCell colSpan={columns.length + 2} align="center">
-                    No members found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {members.map((member) => (
-                <TableRow
-                  key={member.member_id}
-                  hover
-                  onClick={() => setHistoryMember(member)}
-                  sx={{ cursor: 'pointer' }}
-                >
-                  <TableCell>{member.first_name}</TableCell>
-                  <TableCell>{member.last_name}</TableCell>
-                  <TableCell>{member.email}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={member.membership_status}
-                      color={statusColors[member.membership_status]}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>{member.phone_number ?? '—'}</TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      aria-label={`Edit ${member.first_name} ${member.last_name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openEditDialog(member);
-                      }}
-                    >
-                      <EditOutlinedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      aria-label={`Delete ${member.first_name} ${member.last_name}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDeletingMember(member);
-                      }}
-                    >
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_event, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => {
-            setRowsPerPage(Number(event.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
-      </Paper>
+      <DataTable
+        columns={columns}
+        rows={members}
+        getRowId={(row: Member) => row.member_id}
+        rowCount={total}
+        loading={isLoading}
+        autoHeight
+        paginationModel={paginationModel}
+        onPaginationModelChange={(model) => setPagination(model.page, model.pageSize)}
+        sortModel={sortModel}
+        onSortModelChange={handleSortModelChange}
+        filterModel={filterModel}
+        onFilterModelChange={handleFilterModelChange}
+        onRowClick={(params) => setHistoryMember(params.row as Member)}
+        sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' } }}
+      />
 
       <MemberFormDialog
         key={formKey}

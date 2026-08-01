@@ -10,41 +10,56 @@ import { MembersPage } from './MembersPage';
 
 const API_ORIGIN = 'http://localhost:3000/api/v1';
 
+function findRow(text: string) {
+  return screen.findByText(text).then((cell) => {
+    const row = cell.closest('[role="row"]');
+    if (!row) {
+      throw new Error(`Expected a DataGrid row containing "${text}"`);
+    }
+    return row as HTMLElement;
+  });
+}
+
 describe('MembersPage', () => {
   it('lists members from the API', async () => {
     render(<MembersPage />);
 
-    expect(await screen.findByText('Ada')).toBeVisible();
-    expect(screen.getByText('Grace')).toBeVisible();
+    expect(await screen.findByText('Ada Lovelace')).toBeVisible();
+    expect(screen.getByText('Grace Hopper')).toBeVisible();
   });
 
-  it('shows an empty state when a filter matches nothing', async () => {
-    const user = userEvent.setup();
-    render(<MembersPage />);
-    await screen.findByText('Ada');
+  it('filters the list by name, reflecting the filter in the URL', async () => {
+    render(<MembersPage />, { initialEntries: ['/members?name=Grace'] });
 
-    await user.type(screen.getByLabelText('Name'), 'no such member');
-
-    expect(await screen.findByText('No members found.')).toBeVisible();
+    expect(await screen.findByText('Grace Hopper')).toBeVisible();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 
   it('filters the list by email', async () => {
-    const user = userEvent.setup();
-    render(<MembersPage />);
-    await screen.findByText('Ada');
+    render(<MembersPage />, { initialEntries: ['/members?email=grace'] });
 
-    await user.type(screen.getByLabelText('Email'), 'grace');
+    expect(await screen.findByText('Grace Hopper')).toBeVisible();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
+  });
 
-    await waitFor(() => {
-      expect(screen.queryByText('Ada')).not.toBeInTheDocument();
-    });
-    expect(screen.getByText('Grace')).toBeVisible();
+  it('filters by phone as a substring match', async () => {
+    render(<MembersPage />, { initialEntries: ['/members?phone=555123'] });
+
+    expect(await screen.findByText('Ada Lovelace')).toBeVisible();
+    expect(screen.queryByText('Grace Hopper')).not.toBeInTheDocument();
+  });
+
+  it('filters by status', async () => {
+    render(<MembersPage />, { initialEntries: ['/members?status=Blocked'] });
+
+    expect(await screen.findByText('Grace Hopper')).toBeVisible();
+    expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
   });
 
   it('adds a new member through the dialog', async () => {
     const user = userEvent.setup();
     render(<MembersPage />);
-    await screen.findByText('Ada');
+    await screen.findByText('Ada Lovelace');
 
     await user.click(screen.getByRole('button', { name: 'Add member' }));
     const dialog = screen.getByRole('dialog');
@@ -53,18 +68,15 @@ describe('MembersPage', () => {
     await user.type(within(dialog).getByLabelText(/^email/i), 'katherine@example.com');
     await user.click(within(dialog).getByRole('button', { name: 'Add member' }));
 
-    expect(await screen.findByText('Katherine')).toBeVisible();
+    expect(await screen.findByText('Katherine Johnson')).toBeVisible();
   });
 
   it('edits an existing member through the dialog', async () => {
     const user = userEvent.setup();
     render(<MembersPage />);
-    const row = (await screen.findByText('Ada')).closest('tr');
-    if (!row) {
-      throw new Error('Expected a table row');
-    }
+    const row = await findRow('Ada Lovelace');
 
-    await user.click(within(row).getByRole('button', { name: /edit ada lovelace/i }));
+    await user.click(within(row).getByRole('menuitem', { name: /edit ada lovelace/i }));
     const dialog = screen.getByRole('dialog');
     const emailField = within(dialog).getByLabelText(/^email/i);
     await user.clear(emailField);
@@ -77,18 +89,25 @@ describe('MembersPage', () => {
   it('deletes a member after confirmation', async () => {
     const user = userEvent.setup();
     render(<MembersPage />);
-    const row = (await screen.findByText('Ada')).closest('tr');
-    if (!row) {
-      throw new Error('Expected a table row');
-    }
+    const row = await findRow('Ada Lovelace');
 
-    await user.click(within(row).getByRole('button', { name: /delete ada lovelace/i }));
+    await user.click(within(row).getByRole('menuitem', { name: /delete ada lovelace/i }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Ada')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
     });
-    expect(screen.getByText('Grace')).toBeVisible();
+    expect(screen.getByText('Grace Hopper')).toBeVisible();
+  });
+
+  it('opens the loan history dialog when a row is clicked', async () => {
+    const user = userEvent.setup();
+    render(<MembersPage />);
+    const row = await findRow('Ada Lovelace');
+
+    await user.click(row);
+
+    expect(await screen.findByRole('dialog')).toBeVisible();
   });
 
   it('shows a server error message when the list fails to load', async () => {
@@ -106,7 +125,7 @@ describe('MembersPage', () => {
     render(<MembersPage />);
 
     for (const member of memberFixtures) {
-      expect(await screen.findByText(member.first_name)).toBeVisible();
+      expect(await screen.findByText(`${member.first_name} ${member.last_name}`)).toBeVisible();
     }
   });
 });

@@ -54,6 +54,7 @@ export interface ListMembersParams {
   limit: number;
   name?: string;
   email?: string;
+  phoneNumber?: string;
   status?: MembershipStatus;
   sortBy: MemberSortField;
   sortDir: SortDir;

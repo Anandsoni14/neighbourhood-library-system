@@ -411,6 +411,7 @@ export const handlers = [
     const limit = Number(url.searchParams.get('limit') ?? '100');
     const name = url.searchParams.get('name');
     const email = url.searchParams.get('email');
+    const phoneNumber = url.searchParams.get('phone_number');
     const status = url.searchParams.get('status');
     const sortBy = (url.searchParams.get('sort_by') ??
       'last_name') as keyof (typeof members)[number];
@@ -420,6 +421,7 @@ export const handlers = [
       (member) =>
         (matches(member.first_name, name) || matches(member.last_name, name)) &&
         matches(member.email, email) &&
+        matches(member.phone_number, phoneNumber) &&
         (status ? member.membership_status === status : true),
     );
 

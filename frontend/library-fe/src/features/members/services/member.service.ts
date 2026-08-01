@@ -20,6 +20,7 @@ export const memberService = {
         limit: params.limit,
         name: nonEmpty(params.name),
         email: nonEmpty(params.email),
+        phone_number: nonEmpty(params.phoneNumber),
         status: params.status,
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
