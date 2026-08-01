@@ -34,9 +34,6 @@ export function LoginPage() {
     if (isAuthenticated) {
       void navigate(redirectTo, { replace: true });
     }
-    // Only re-run when auth state actually flips; redirectTo/navigate are
-    // stable enough per render that including them would just add noise.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {

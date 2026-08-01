@@ -76,7 +76,7 @@ describe('MembersPage', () => {
     render(<MembersPage />);
     const row = await findRow('Ada Lovelace');
 
-    await user.click(within(row).getByRole('menuitem', { name: /edit ada lovelace/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog');
     const emailField = within(dialog).getByLabelText(/^email/i);
     await user.clear(emailField);
@@ -91,7 +91,7 @@ describe('MembersPage', () => {
     render(<MembersPage />);
     const row = await findRow('Ada Lovelace');
 
-    await user.click(within(row).getByRole('menuitem', { name: /delete ada lovelace/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Delete' }));
     await user.click(screen.getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {

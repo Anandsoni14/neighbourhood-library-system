@@ -211,7 +211,7 @@ test.describe('loan lifecycle', () => {
 
     await expect(page.getByText('ACTIVE')).toBeVisible();
 
-    await page.getByRole('menuitem', { name: /return loan/i }).click();
+    await page.getByRole('menuitem', { name: 'Return' }).click();
     const returnDialog = page.getByRole('dialog');
     await returnDialog.getByLabel(/return condition/i).click();
     await page.getByRole('option', { name: 'Good' }).click();

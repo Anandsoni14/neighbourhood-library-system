@@ -100,7 +100,7 @@ describe('StaffPage', () => {
     render(<StaffPage />, asAdmin);
     const row = await findRow('Priya Singh');
 
-    await user.click(within(row).getByRole('menuitem', { name: /edit priya singh/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog');
     const emailField = within(dialog).getByLabelText(/^email/i);
     await user.clear(emailField);
@@ -115,7 +115,7 @@ describe('StaffPage', () => {
     render(<StaffPage />, asAdmin);
     const row = await findRow('Priya Singh');
 
-    await user.click(within(row).getByRole('menuitem', { name: /deactivate priya singh/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Deactivate' }));
 
     await waitFor(async () => {
       const updatedRow = await findRow('Priya Singh');
@@ -123,7 +123,7 @@ describe('StaffPage', () => {
     });
 
     const inactiveRow = await findRow('Priya Singh');
-    await user.click(within(inactiveRow).getByRole('menuitem', { name: /activate priya singh/i }));
+    await user.click(within(inactiveRow).getByRole('menuitem', { name: 'Activate' }));
 
     await waitFor(async () => {
       const activeRow = await findRow('Priya Singh');

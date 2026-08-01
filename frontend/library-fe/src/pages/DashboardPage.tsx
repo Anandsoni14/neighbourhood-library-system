@@ -10,10 +10,8 @@ import CardActionArea from '@mui/material/CardActionArea';
 import CardContent from '@mui/material/CardContent';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import {
-  GridActionsCellItem,
   type GridCellParams,
   type GridColDef,
   type GridFilterModel,
@@ -25,6 +23,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { DataTable } from '@/components/DataTable';
+import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import type { Book } from '@/features/books/types/book.types';
@@ -187,9 +186,6 @@ export function DashboardPage() {
     [sortField, sortDir],
   );
 
-  // Not memoized: closes over render-scoped state (members, copies, books)
-  // that would all need to be deps anyway; recomputing this small array each
-  // render is cheap and avoids stale-closure bugs.
   const columns: GridColDef<OverdueLoan>[] = [
     {
       field: 'member',
@@ -249,14 +245,12 @@ export function DashboardPage() {
       headerName: 'Actions',
       width: 80,
       getActions: (params: GridRowParams<OverdueLoan>) => [
-        <Tooltip key="return" title={`Return loan ${params.row.loan_id}`}>
-          <GridActionsCellItem
-            icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
-            label={`Return loan ${params.row.loan_id}`}
-            onClick={() => openReturnDialog(params.row)}
-            showInMenu={false}
-          />
-        </Tooltip>,
+        <DataTableActionButton
+          key="return"
+          label="Return"
+          icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
+          onClick={() => openReturnDialog(params.row)}
+        />,
       ],
     },
   ];

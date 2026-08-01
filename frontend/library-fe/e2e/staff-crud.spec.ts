@@ -152,7 +152,7 @@ test.describe('staff directory', () => {
     await page.getByRole('navigation').getByRole('link', { name: /staff/i }).click();
     await expect(page).toHaveURL(/\/staff$/);
 
-    await page.getByRole('menuitem', { name: 'Edit Priya Singh' }).click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
     const dialog = page.getByRole('dialog');
     const emailField = dialog.getByLabel(/^email/i);
     await emailField.fill('priya.s@example.com');
@@ -165,7 +165,7 @@ test.describe('staff directory', () => {
     await page.goto('/staff?status=Active');
     await expect(page.getByText('Priya Singh')).toBeVisible();
 
-    await page.getByRole('menuitem', { name: 'Deactivate Priya Singh' }).click();
+    await page.getByRole('menuitem', { name: 'Deactivate' }).click();
 
     await expect(page.getByText(/no rows/i)).toBeVisible();
   });

@@ -6,10 +6,8 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import {
-  GridActionsCellItem,
   type GridColDef,
   type GridFilterModel,
   type GridRowParams,
@@ -19,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
+import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { MemberLoanHistoryDialog } from '@/features/loans/components/MemberLoanHistoryDialog';
 import { MemberFormDialog } from '@/features/members/components/MemberFormDialog';
@@ -39,8 +38,6 @@ type Filters = Record<'name' | 'email' | 'phone' | 'status', string>;
 
 const emptyFilters: Filters = { name: '', email: '', phone: '', status: '' };
 
-// No default filter: MUI Community's filter panel only supports one active
-// filter at a time, so pre-setting Status would block filtering by anything else.
 const defaultFilters: Filters = emptyFilters;
 
 const STATUS_OPTIONS = ['Active', 'Blocked', 'Inactive'];
@@ -51,9 +48,6 @@ const statusColors: Record<MembershipStatus, 'success' | 'error' | 'default'> = 
   [MembershipStatus.INACTIVE]: 'default',
 };
 
-// The DataGrid shows one merged "Name" column (the backend's `name` filter
-// already matches first-or-last), sorted by last name — these translate
-// between that column's grid field and the backend's per-field sort params.
 const SORT_FIELD_BY_GRID_FIELD: Record<string, MemberSortField> = {
   name: MemberSortField.LAST_NAME,
   email: MemberSortField.EMAIL,
@@ -130,7 +124,6 @@ export function MembersPage() {
 
   useEffect(() => {
     void fetchMembers(fetchParams);
-    // fetchMembers is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, sortField, sortDir, debouncedFilters]);
 
@@ -242,27 +235,20 @@ export function MembersPage() {
       type: 'actions',
       headerName: 'Actions',
       width: 100,
-      getActions: (params: GridRowParams<Member>) => {
-        const name = `${params.row.first_name} ${params.row.last_name}`;
-        return [
-          <Tooltip key="edit" title={`Edit ${name}`}>
-            <GridActionsCellItem
-              icon={<EditOutlinedIcon fontSize="small" />}
-              label={`Edit ${name}`}
-              onClick={() => openEditDialog(params.row)}
-              showInMenu={false}
-            />
-          </Tooltip>,
-          <Tooltip key="delete" title={`Delete ${name}`}>
-            <GridActionsCellItem
-              icon={<DeleteOutlineIcon fontSize="small" />}
-              label={`Delete ${name}`}
-              onClick={() => setDeletingMember(params.row)}
-              showInMenu={false}
-            />
-          </Tooltip>,
-        ];
-      },
+      getActions: (params: GridRowParams<Member>) => [
+        <DataTableActionButton
+          key="edit"
+          label="Edit"
+          icon={<EditOutlinedIcon fontSize="small" />}
+          onClick={() => openEditDialog(params.row)}
+        />,
+        <DataTableActionButton
+          key="delete"
+          label="Delete"
+          icon={<DeleteOutlineIcon fontSize="small" />}
+          onClick={() => setDeletingMember(params.row)}
+        />,
+      ],
     },
   ];
 

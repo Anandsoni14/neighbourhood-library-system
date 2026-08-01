@@ -66,7 +66,7 @@ describe('CategoriesPage', () => {
     render(<CategoriesPage />);
     const row = await findRow('Software');
 
-    await user.click(within(row).getByRole('menuitem', { name: /edit software/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog');
     const nameField = within(dialog).getByLabelText(/^name/i);
     await user.clear(nameField);
@@ -81,7 +81,7 @@ describe('CategoriesPage', () => {
     render(<CategoriesPage />, { initialEntries: ['/categories?status=Active'] });
     const row = await findRow('Software');
 
-    await user.click(within(row).getByRole('menuitem', { name: /archive software/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Archive' }));
 
     await waitFor(() => {
       expect(screen.queryByText('Software')).not.toBeInTheDocument();

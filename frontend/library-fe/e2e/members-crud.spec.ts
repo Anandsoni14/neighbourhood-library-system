@@ -134,7 +134,7 @@ test.describe('members directory', () => {
       .click();
     await expect(page).toHaveURL(/\/members$/);
 
-    await page.getByRole('menuitem', { name: /edit katherine johnson/i }).click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
     const dialog = page.getByRole('dialog');
     const emailField = dialog.getByLabel(/^email/i);
     await emailField.fill('katherine.johnson@example.com');
@@ -150,7 +150,7 @@ test.describe('members directory', () => {
       .click();
     await expect(page).toHaveURL(/\/members$/);
 
-    await page.getByRole('menuitem', { name: /delete katherine johnson/i }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
     await page.getByRole('button', { name: 'Delete' }).click();
 
     await expect(page.getByText(/no rows/i)).toBeVisible();

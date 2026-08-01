@@ -5,10 +5,8 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import {
-  GridActionsCellItem,
   type GridColDef,
   type GridFilterModel,
   type GridRowParams,
@@ -17,6 +15,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
+import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { IssueLoanDialog } from '@/features/loans/components/IssueLoanDialog';
 import { ReturnLoanDialog } from '@/features/loans/components/ReturnLoanDialog';
@@ -38,8 +37,6 @@ type Filters = Record<'member' | 'book' | 'barcode' | 'status', string>;
 
 const emptyFilters: Filters = { member: '', book: '', barcode: '', status: '' };
 
-// No default filter: MUI Community's filter panel only supports one active
-// filter at a time, so pre-setting Status would block filtering by anything else.
 const defaultFilters: Filters = emptyFilters;
 
 const STATUS_OPTIONS = ['Active', 'Returned'];
@@ -188,9 +185,6 @@ export function LoansPage() {
     [sortField, sortDir],
   );
 
-  // Not memoized: closes over render-scoped state (members, copies, books)
-  // that would all need to be deps anyway; recomputing this small array each
-  // render is cheap and avoids stale-closure bugs.
   const columns: GridColDef<Loan>[] = [
     {
       field: 'member',
@@ -280,14 +274,12 @@ export function LoansPage() {
           return [];
         }
         return [
-          <Tooltip key="return" title={`Return loan ${params.row.loan_id}`}>
-            <GridActionsCellItem
-              icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
-              label={`Return loan ${params.row.loan_id}`}
-              onClick={() => openReturnDialog(params.row)}
-              showInMenu={false}
-            />
-          </Tooltip>,
+          <DataTableActionButton
+            key="return"
+            label="Return"
+            icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
+            onClick={() => openReturnDialog(params.row)}
+          />,
         ];
       },
     },

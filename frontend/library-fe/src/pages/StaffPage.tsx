@@ -7,10 +7,8 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import {
-  GridActionsCellItem,
   type GridColDef,
   type GridFilterModel,
   type GridRowParams,
@@ -19,6 +17,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
+import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { StaffFormDialog } from '@/features/staff/components/StaffFormDialog';
@@ -147,12 +146,9 @@ export function StaffPage() {
       return;
     }
     void fetchStaff(fetchParams);
-    // fetchStaff is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, page, pageSize, sortField, sortDir, debouncedFilters]);
 
-  // Hooks below (useState/useMemo) must run unconditionally on every render,
-  // so the admin-only early return happens after them, not before.
   const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
     items: (Object.keys(filters) as (keyof Filters)[])
       .filter((key) => filters[key])
@@ -294,31 +290,26 @@ export function StaffPage() {
       headerName: 'Actions',
       width: 100,
       getActions: (params: GridRowParams<Staff>) => {
-        const name = `${params.row.first_name} ${params.row.last_name}`;
         const isActive = params.row.status === StaffStatus.ACTIVE;
         return [
-          <Tooltip key="edit" title={`Edit ${name}`}>
-            <GridActionsCellItem
-              icon={<EditOutlinedIcon fontSize="small" />}
-              label={`Edit ${name}`}
-              onClick={() => openEditDialog(params.row)}
-              showInMenu={false}
-            />
-          </Tooltip>,
-          <Tooltip key="toggle" title={isActive ? `Deactivate ${name}` : `Activate ${name}`}>
-            <GridActionsCellItem
-              icon={
-                isActive ? (
-                  <BlockOutlinedIcon fontSize="small" />
-                ) : (
-                  <CheckCircleOutlineOutlinedIcon fontSize="small" />
-                )
-              }
-              label={isActive ? `Deactivate ${name}` : `Activate ${name}`}
-              onClick={() => void handleToggleStatus(params.row)}
-              showInMenu={false}
-            />
-          </Tooltip>,
+          <DataTableActionButton
+            key="edit"
+            label="Edit"
+            icon={<EditOutlinedIcon fontSize="small" />}
+            onClick={() => openEditDialog(params.row)}
+          />,
+          <DataTableActionButton
+            key="toggle"
+            label={isActive ? 'Deactivate' : 'Activate'}
+            icon={
+              isActive ? (
+                <BlockOutlinedIcon fontSize="small" />
+              ) : (
+                <CheckCircleOutlineOutlinedIcon fontSize="small" />
+              )
+            }
+            onClick={() => void handleToggleStatus(params.row)}
+          />,
         ];
       },
     },

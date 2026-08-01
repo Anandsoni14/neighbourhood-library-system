@@ -8,10 +8,8 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import {
-  GridActionsCellItem,
   type GridColDef,
   type GridFilterModel,
   type GridRowParams,
@@ -20,6 +18,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
+import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { BookFormDialog } from '@/features/books/components/BookFormDialog';
 import { useBooks } from '@/features/books/hooks/useBooks';
@@ -298,47 +297,30 @@ export function BooksPage() {
       headerName: 'Actions',
       width: 140,
       getActions: (params: GridRowParams<Book>) => [
-        // Tooltip overwrites the child's aria-label with its own `title`, so
-        // both must carry the same text to keep the button properly named.
-        <Tooltip key="view-copies" title={`View copies for ${params.row.title}`}>
-          <GridActionsCellItem
-            icon={<Inventory2OutlinedIcon fontSize="small" />}
-            label={`View copies for ${params.row.title}`}
-            onClick={() => setViewingCopiesBook(params.row)}
-            showInMenu={false}
-          />
-        </Tooltip>,
-        <Tooltip key="edit" title={`Edit ${params.row.title}`}>
-          <GridActionsCellItem
-            icon={<EditOutlinedIcon fontSize="small" />}
-            label={`Edit ${params.row.title}`}
-            onClick={() => openEditDialog(params.row)}
-            showInMenu={false}
-          />
-        </Tooltip>,
-        <Tooltip
+        <DataTableActionButton
+          key="view-copies"
+          label="Copies"
+          icon={<Inventory2OutlinedIcon fontSize="small" />}
+          onClick={() => setViewingCopiesBook(params.row)}
+        />,
+        <DataTableActionButton
+          key="edit"
+          label="Edit"
+          icon={<EditOutlinedIcon fontSize="small" />}
+          onClick={() => openEditDialog(params.row)}
+        />,
+        <DataTableActionButton
           key="archive"
-          title={
-            params.row.is_archived ? `Unarchive ${params.row.title}` : `Archive ${params.row.title}`
+          label={params.row.is_archived ? 'Unarchive' : 'Archive'}
+          icon={
+            params.row.is_archived ? (
+              <UnarchiveOutlinedIcon fontSize="small" />
+            ) : (
+              <ArchiveOutlinedIcon fontSize="small" />
+            )
           }
-        >
-          <GridActionsCellItem
-            icon={
-              params.row.is_archived ? (
-                <UnarchiveOutlinedIcon fontSize="small" />
-              ) : (
-                <ArchiveOutlinedIcon fontSize="small" />
-              )
-            }
-            label={
-              params.row.is_archived
-                ? `Unarchive ${params.row.title}`
-                : `Archive ${params.row.title}`
-            }
-            onClick={() => void handleToggleArchive(params.row)}
-            showInMenu={false}
-          />
-        </Tooltip>,
+          onClick={() => void handleToggleArchive(params.row)}
+        />,
       ],
     },
   ];

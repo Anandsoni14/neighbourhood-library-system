@@ -140,7 +140,7 @@ test.describe('categories catalog', () => {
     await page.getByRole('navigation').getByRole('link', { name: /categories/i }).click();
     await expect(page).toHaveURL(/\/categories$/);
 
-    await page.getByRole('menuitem', { name: 'Edit Software' }).click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
     const dialog = page.getByRole('dialog');
     const nameField = dialog.getByLabel(/^name/i);
     await nameField.fill('Engineering');
@@ -153,7 +153,7 @@ test.describe('categories catalog', () => {
     await page.goto('/categories?status=Active');
     await expect(page.getByText('Software')).toBeVisible();
 
-    await page.getByRole('menuitem', { name: 'Archive Software' }).click();
+    await page.getByRole('menuitem', { name: 'Archive' }).click();
 
     await expect(page.getByText(/no rows/i)).toBeVisible();
   });

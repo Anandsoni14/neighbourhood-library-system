@@ -74,7 +74,7 @@ describe('BooksPage', () => {
     render(<BooksPage />);
     const row = await findRow('Clean Code');
 
-    await user.click(within(row).getByRole('menuitem', { name: /edit clean code/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Edit' }));
     const dialog = screen.getByRole('dialog');
     const titleField = within(dialog).getByLabelText(/^title/i);
     await user.clear(titleField);
@@ -89,7 +89,7 @@ describe('BooksPage', () => {
     render(<BooksPage />, { initialEntries: ['/books?status=Active'] });
     const row = await findRow('Clean Code');
 
-    await user.click(within(row).getByRole('menuitem', { name: /archive clean code/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Archive' }));
 
     await waitFor(() => {
       expect(screen.queryByText('Clean Code')).not.toBeInTheDocument();

@@ -7,10 +7,8 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import {
-  GridActionsCellItem,
   type GridColDef,
   type GridFilterModel,
   type GridRowParams,
@@ -19,6 +17,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
+import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { CategoryFormDialog } from '@/features/categories/components/CategoryFormDialog';
 import { useCategories } from '@/features/categories/hooks/useCategories';
@@ -102,7 +101,6 @@ export function CategoriesPage() {
 
   useEffect(() => {
     void fetchCategories(fetchParams);
-    // fetchCategories is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, sortDir, debouncedFilters]);
 
@@ -207,35 +205,24 @@ export function CategoriesPage() {
       headerName: 'Actions',
       width: 100,
       getActions: (params: GridRowParams<Category>) => [
-        <Tooltip key="edit" title={`Edit ${params.row.name}`}>
-          <GridActionsCellItem
-            icon={<EditOutlinedIcon fontSize="small" />}
-            label={`Edit ${params.row.name}`}
-            onClick={() => openEditDialog(params.row)}
-            showInMenu={false}
-          />
-        </Tooltip>,
-        <Tooltip
+        <DataTableActionButton
+          key="edit"
+          label="Edit"
+          icon={<EditOutlinedIcon fontSize="small" />}
+          onClick={() => openEditDialog(params.row)}
+        />,
+        <DataTableActionButton
           key="archive"
-          title={
-            params.row.is_archived ? `Unarchive ${params.row.name}` : `Archive ${params.row.name}`
+          label={params.row.is_archived ? 'Unarchive' : 'Archive'}
+          icon={
+            params.row.is_archived ? (
+              <UnarchiveOutlinedIcon fontSize="small" />
+            ) : (
+              <ArchiveOutlinedIcon fontSize="small" />
+            )
           }
-        >
-          <GridActionsCellItem
-            icon={
-              params.row.is_archived ? (
-                <UnarchiveOutlinedIcon fontSize="small" />
-              ) : (
-                <ArchiveOutlinedIcon fontSize="small" />
-              )
-            }
-            label={
-              params.row.is_archived ? `Unarchive ${params.row.name}` : `Archive ${params.row.name}`
-            }
-            onClick={() => void handleToggleArchive(params.row)}
-            showInMenu={false}
-          />
-        </Tooltip>,
+          onClick={() => void handleToggleArchive(params.row)}
+        />,
       ],
     },
   ];

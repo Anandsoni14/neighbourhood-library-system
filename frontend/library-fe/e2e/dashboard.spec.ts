@@ -179,7 +179,7 @@ test.describe('dashboard', () => {
   });
 
   test('returns an overdue loan directly from the dashboard', async ({ page }) => {
-    await page.getByRole('menuitem', { name: /return loan/i }).click();
+    await page.getByRole('menuitem', { name: 'Return' }).click();
 
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel(/return condition/i).click();

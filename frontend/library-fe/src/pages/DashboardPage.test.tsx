@@ -110,7 +110,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />);
     const row = await findRow('Ada Lovelace');
 
-    await user.click(within(row).getByRole('menuitem', { name: /return loan/i }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Return' }));
     const dialog = screen.getByRole('dialog');
     await user.click(within(dialog).getByLabelText(/return condition/i));
     await user.click(screen.getByRole('option', { name: 'Good' }));

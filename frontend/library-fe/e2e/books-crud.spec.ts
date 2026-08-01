@@ -154,7 +154,7 @@ test.describe('books catalog', () => {
     await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
     await expect(page).toHaveURL(/\/books$/);
 
-    await page.getByRole('menuitem', { name: 'Edit Clean Code' }).click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
     const dialog = page.getByRole('dialog');
     const titleField = dialog.getByLabel(/^title/i);
     await titleField.fill('Clean Code (2nd Edition)');
@@ -169,7 +169,7 @@ test.describe('books catalog', () => {
 
     // Books have no delete action — only archive/unarchive (see
     // api/books.py, which exposes no DELETE /books/{id} route).
-    await page.getByRole('menuitem', { name: 'Archive Clean Code' }).click();
+    await page.getByRole('menuitem', { name: 'Archive' }).click();
 
     await expect(page.getByText(/no rows/i)).toBeVisible();
   });
