@@ -7,26 +7,19 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import FormControl from '@mui/material/FormControl';
-import IconButton from '@mui/material/IconButton';
-import InputLabel from '@mui/material/InputLabel';
-import LinearProgress from '@mui/material/LinearProgress';
-import MenuItem from '@mui/material/MenuItem';
-import Paper from '@mui/material/Paper';
-import Select, { type SelectChangeEvent } from '@mui/material/Select';
 import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
-import TableRow from '@mui/material/TableRow';
-import TableSortLabel from '@mui/material/TableSortLabel';
-import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { type ChangeEvent, useEffect, useState } from 'react';
+import {
+  GridActionsCellItem,
+  type GridColDef,
+  type GridFilterModel,
+  type GridRowParams,
+  type GridSortModel,
+} from '@mui/x-data-grid';
+import { useEffect, useMemo, useState } from 'react';
 
+import { DataTable } from '@/components/DataTable';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { BookFormDialog } from '@/features/books/components/BookFormDialog';
 import { useBooks } from '@/features/books/hooks/useBooks';
@@ -36,40 +29,52 @@ import { useCategories } from '@/features/categories/hooks/useCategories';
 import { CategorySortField } from '@/features/categories/types/category.types';
 import { BookCopiesDialog } from '@/features/copies/components/BookCopiesDialog';
 import { useBookCopyCounts } from '@/features/copies/hooks/useBookCopyCounts';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { SortDir } from '@/types/common';
+import {
+  containsOnlyOperators,
+  equalsOnlyOperators,
+  filtersFromFilterModel,
+} from '@/utils/gridFilterOperators';
 
-/** How long a filter text field must sit idle before it triggers a fetch. */
-const FILTER_DEBOUNCE_MS = 300;
-
-interface SortableColumn {
-  field: BookSortField;
-  label: string;
-}
-
-const columns: SortableColumn[] = [
-  { field: BookSortField.TITLE, label: 'Title' },
-  { field: BookSortField.AUTHOR, label: 'Author' },
-  { field: BookSortField.CATEGORY, label: 'Category' },
-  { field: BookSortField.PUBLISHED_YEAR, label: 'Year' },
-];
-
-interface Filters {
-  title: string;
-  author: string;
-  categoryId: string;
-  isbn: string;
-  archived: BookArchiveFilter;
-}
+type Filters = Record<'title' | 'author' | 'category' | 'isbn' | 'status' | 'stock', string>;
 
 const emptyFilters: Filters = {
   title: '',
   author: '',
-  categoryId: '',
+  category: '',
   isbn: '',
-  archived: BookArchiveFilter.ACTIVE,
+  status: '',
+  stock: '',
 };
+
+// No default filter: MUI Community's filter panel only supports one active
+// filter at a time, so pre-setting Status would block filtering by anything else.
+const defaultFilters: Filters = emptyFilters;
+
+const STATUS_OPTIONS = ['Active', 'Archived', 'All'];
+const STOCK_OPTIONS = ['In Stock', 'Out of Stock'];
+
+function statusToArchiveFilter(status: string): BookArchiveFilter {
+  if (status === 'Active') {
+    return BookArchiveFilter.ACTIVE;
+  }
+  if (status === 'Archived') {
+    return BookArchiveFilter.ARCHIVED;
+  }
+  return BookArchiveFilter.ALL;
+}
+
+function stockToInStock(stock: string): boolean | undefined {
+  if (stock === 'In Stock') {
+    return true;
+  }
+  if (stock === 'Out of Stock') {
+    return false;
+  }
+  return undefined;
+}
 
 export function BooksPage() {
   useDocumentTitle('Books');
@@ -93,12 +98,20 @@ export function BooksPage() {
   const [copyCountsReloadToken, setCopyCountsReloadToken] = useState(0);
   const copyCounts = useBookCopyCounts(bookIds, copyCountsReloadToken);
 
-  const [filters, setFilters] = useState<Filters>(emptyFilters);
-  const debouncedFilters = useDebouncedValue(filters, FILTER_DEBOUNCE_MS);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [sortBy, setSortBy] = useState<BookSortField>(BookSortField.TITLE);
-  const [sortDir, setSortDir] = useState<SortDir>(SortDir.ASC);
+  const {
+    filters,
+    debouncedFilters,
+    setFilters,
+    page,
+    pageSize,
+    setPagination,
+    sortField,
+    sortDir,
+    setSort,
+  } = useTableQueryParams<Filters>({
+    defaultFilters,
+    defaultSortField: BookSortField.TITLE,
+  });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
@@ -119,61 +132,27 @@ export function BooksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const fetchParams = {
+    skip: page * pageSize,
+    limit: pageSize,
+    title: debouncedFilters.title || undefined,
+    author: debouncedFilters.author || undefined,
+    categoryId: debouncedFilters.category || undefined,
+    isbn: debouncedFilters.isbn || undefined,
+    archived: statusToArchiveFilter(debouncedFilters.status),
+    inStock: stockToInStock(debouncedFilters.stock),
+    sortBy: sortField as BookSortField,
+    sortDir,
+  };
+
   useEffect(() => {
-    void fetchBooks({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      title: debouncedFilters.title,
-      author: debouncedFilters.author,
-      categoryId: debouncedFilters.categoryId || undefined,
-      isbn: debouncedFilters.isbn,
-      archived: debouncedFilters.archived,
-      sortBy,
-      sortDir,
-    });
-    // fetchBooks is a stable dispatch wrapper; including it would just add noise.
+    void fetchBooks(fetchParams);
+    // fetchBooks is a stable dispatch wrapper; including it (or the object
+    // literal above) would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, sortBy, sortDir, debouncedFilters]);
+  }, [page, pageSize, sortField, sortDir, debouncedFilters]);
 
-  const handleFilterChange =
-    (field: 'title' | 'author' | 'isbn') => (event: ChangeEvent<HTMLInputElement>) => {
-      setFilters((prev) => ({ ...prev, [field]: event.target.value }));
-      setPage(0);
-    };
-
-  const handleCategoryFilterChange = (event: SelectChangeEvent<string>) => {
-    setFilters((prev) => ({ ...prev, categoryId: event.target.value }));
-    setPage(0);
-  };
-
-  const handleArchivedFilterChange = (event: SelectChangeEvent<BookArchiveFilter>) => {
-    setFilters((prev) => ({ ...prev, archived: event.target.value }));
-    setPage(0);
-  };
-
-  const handleSort = (field: BookSortField) => {
-    if (field === sortBy) {
-      setSortDir(sortDir === SortDir.ASC ? SortDir.DESC : SortDir.ASC);
-    } else {
-      setSortBy(field);
-      setSortDir(SortDir.ASC);
-    }
-    setPage(0);
-  };
-
-  const refetch = () => {
-    void fetchBooks({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      title: filters.title,
-      author: filters.author,
-      categoryId: filters.categoryId || undefined,
-      isbn: filters.isbn,
-      archived: filters.archived,
-      sortBy,
-      sortDir,
-    });
-  };
+  const refetch = () => void fetchBooks(fetchParams);
 
   const openAddDialog = () => {
     setEditingBook(null);
@@ -213,6 +192,154 @@ export function BooksPage() {
     }
   };
 
+  // Local state, not derived from committed `filters` (which drops empty
+  // values) — otherwise picking a new Column before typing a Value would
+  // vanish on the next render as the controlled prop snaps back.
+  const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
+    items: (Object.keys(filters) as (keyof Filters)[])
+      .filter((key) => filters[key])
+      .map((key) => ({
+        field: key,
+        operator: key === 'category' || key === 'status' || key === 'stock' ? 'is' : 'contains',
+        value: filters[key],
+      })),
+  }));
+
+  const handleFilterModelChange = (model: GridFilterModel) => {
+    setFilterModel(model);
+    setFilters(filtersFromFilterModel(model, emptyFilters));
+  };
+
+  const handleSortModelChange = (model: GridSortModel) => {
+    const item = model[0];
+    if (item?.sort) {
+      setSort(item.field, item.sort === 'desc' ? SortDir.DESC : SortDir.ASC);
+    }
+  };
+
+  // Memoized: DataGrid compares controlled paginationModel/sortModel by
+  // reference, so a fresh literal every render causes it to re-sync to page 0.
+  const paginationModel = useMemo(() => ({ page, pageSize }), [page, pageSize]);
+  const sortModel: GridSortModel = useMemo(
+    () => [{ field: sortField, sort: sortDir }],
+    [sortField, sortDir],
+  );
+
+  // Not memoized: closes over render-scoped state (categories, copyCounts,
+  // handleToggleArchive) that would all need to be deps anyway; recomputing
+  // this small array each render is cheap and avoids stale-closure bugs.
+  const columns: GridColDef<Book>[] = [
+    { field: 'title', headerName: 'Title', flex: 1.2, filterOperators: containsOnlyOperators },
+    { field: 'author', headerName: 'Author', flex: 1, filterOperators: containsOnlyOperators },
+    {
+      field: 'category',
+      headerName: 'Category',
+      flex: 1,
+      type: 'singleSelect',
+      valueOptions: categories.map((category) => ({
+        value: category.category_id,
+        label: category.name,
+      })),
+      valueGetter: (_value, row) => row.category?.category_id ?? '',
+      renderCell: (params) => params.row.category?.name ?? '—',
+      filterOperators: equalsOnlyOperators,
+    },
+    {
+      field: 'published_year',
+      headerName: 'Year',
+      width: 100,
+      filterable: false,
+      valueGetter: (_value, row) => row.published_year ?? '—',
+    },
+    {
+      field: 'isbn',
+      headerName: 'ISBN',
+      flex: 1,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => row.isbn ?? '—',
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 130,
+      sortable: false,
+      type: 'singleSelect',
+      valueOptions: STATUS_OPTIONS,
+      filterOperators: equalsOnlyOperators,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.row.is_archived ? 'Archived' : 'Active'}
+          color={params.row.is_archived ? 'default' : 'success'}
+          variant="outlined"
+        />
+      ),
+    },
+    {
+      field: 'stock',
+      headerName: 'Stock',
+      width: 130,
+      sortable: false,
+      type: 'singleSelect',
+      valueOptions: STOCK_OPTIONS,
+      filterOperators: equalsOnlyOperators,
+      renderCell: (params) => {
+        const counts = copyCounts[params.row.book_id];
+        return counts ? `${counts.available} / ${counts.total}` : '…';
+      },
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 140,
+      getActions: (params: GridRowParams<Book>) => [
+        // Tooltip overwrites the child's aria-label with its own `title`, so
+        // both must carry the same text to keep the button properly named.
+        <Tooltip key="view-copies" title={`View copies for ${params.row.title}`}>
+          <GridActionsCellItem
+            icon={<Inventory2OutlinedIcon fontSize="small" />}
+            label={`View copies for ${params.row.title}`}
+            onClick={() => setViewingCopiesBook(params.row)}
+            showInMenu={false}
+          />
+        </Tooltip>,
+        <Tooltip key="edit" title={`Edit ${params.row.title}`}>
+          <GridActionsCellItem
+            icon={<EditOutlinedIcon fontSize="small" />}
+            label={`Edit ${params.row.title}`}
+            onClick={() => openEditDialog(params.row)}
+            showInMenu={false}
+          />
+        </Tooltip>,
+        <Tooltip
+          key="archive"
+          title={
+            params.row.is_archived ? `Unarchive ${params.row.title}` : `Archive ${params.row.title}`
+          }
+        >
+          <GridActionsCellItem
+            icon={
+              params.row.is_archived ? (
+                <UnarchiveOutlinedIcon fontSize="small" />
+              ) : (
+                <ArchiveOutlinedIcon fontSize="small" />
+              )
+            }
+            label={
+              params.row.is_archived
+                ? `Unarchive ${params.row.title}`
+                : `Archive ${params.row.title}`
+            }
+            onClick={() => void handleToggleArchive(params.row)}
+            showInMenu={false}
+          />
+        </Tooltip>,
+      ],
+    },
+  ];
+
   return (
     <Box>
       <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -224,175 +351,28 @@ export function BooksPage() {
         </Button>
       </Stack>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: 'wrap' }}>
-          <TextField
-            label="Title"
-            value={filters.title}
-            onChange={handleFilterChange('title')}
-            sx={{ minWidth: 180 }}
-          />
-          <TextField
-            label="Author"
-            value={filters.author}
-            onChange={handleFilterChange('author')}
-            sx={{ minWidth: 180 }}
-          />
-          <FormControl sx={{ minWidth: 160 }}>
-            <InputLabel id="book-category-filter-label">Category</InputLabel>
-            <Select
-              labelId="book-category-filter-label"
-              label="Category"
-              value={filters.categoryId}
-              onChange={handleCategoryFilterChange}
-            >
-              <MenuItem value="">All</MenuItem>
-              {categories.map((category) => (
-                <MenuItem key={category.category_id} value={category.category_id}>
-                  {category.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <TextField
-            label="ISBN"
-            value={filters.isbn}
-            onChange={handleFilterChange('isbn')}
-            sx={{ minWidth: 160 }}
-          />
-          <FormControl sx={{ minWidth: 160 }}>
-            <InputLabel id="book-archived-filter-label">Status</InputLabel>
-            <Select
-              labelId="book-archived-filter-label"
-              label="Status"
-              value={filters.archived}
-              onChange={handleArchivedFilterChange}
-            >
-              <MenuItem value={BookArchiveFilter.ACTIVE}>Active</MenuItem>
-              <MenuItem value={BookArchiveFilter.ARCHIVED}>Archived</MenuItem>
-              <MenuItem value={BookArchiveFilter.ALL}>All</MenuItem>
-            </Select>
-          </FormControl>
-        </Stack>
-      </Paper>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Paper>
-        {isLoading && <LinearProgress />}
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableCell key={column.field}>
-                    <TableSortLabel
-                      active={sortBy === column.field}
-                      direction={sortBy === column.field ? sortDir : SortDir.ASC}
-                      onClick={() => handleSort(column.field)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-                <TableCell>ISBN</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Copies</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {books.length === 0 && !isLoading && (
-                <TableRow>
-                  <TableCell colSpan={columns.length + 4} align="center">
-                    No books found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {books.map((book) => {
-                const counts = copyCounts[book.book_id];
-                return (
-                  <TableRow
-                    key={book.book_id}
-                    hover
-                    onClick={() => setViewingCopiesBook(book)}
-                    sx={{ cursor: 'pointer' }}
-                  >
-                    <TableCell>{book.title}</TableCell>
-                    <TableCell>{book.author}</TableCell>
-                    <TableCell>{book.category?.name ?? '—'}</TableCell>
-                    <TableCell>{book.published_year ?? '—'}</TableCell>
-                    <TableCell>{book.isbn ?? '—'}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={book.is_archived ? 'Archived' : 'Active'}
-                        color={book.is_archived ? 'default' : 'success'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{counts ? `${counts.available} / ${counts.total}` : '…'}</TableCell>
-                    <TableCell align="right">
-                      <IconButton
-                        size="small"
-                        aria-label={`View copies for ${book.title}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setViewingCopiesBook(book);
-                        }}
-                      >
-                        <Inventory2OutlinedIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label={`Edit ${book.title}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditDialog(book);
-                        }}
-                      >
-                        <EditOutlinedIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        aria-label={
-                          book.is_archived ? `Unarchive ${book.title}` : `Archive ${book.title}`
-                        }
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleToggleArchive(book);
-                        }}
-                      >
-                        {book.is_archived ? (
-                          <UnarchiveOutlinedIcon fontSize="small" />
-                        ) : (
-                          <ArchiveOutlinedIcon fontSize="small" />
-                        )}
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_event, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => {
-            setRowsPerPage(Number(event.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
-      </Paper>
+      <DataTable
+        columns={columns}
+        rows={books}
+        getRowId={(row: Book) => row.book_id}
+        rowCount={total}
+        loading={isLoading}
+        autoHeight
+        paginationModel={paginationModel}
+        onPaginationModelChange={(model) => setPagination(model.page, model.pageSize)}
+        sortModel={sortModel}
+        onSortModelChange={handleSortModelChange}
+        filterModel={filterModel}
+        onFilterModelChange={handleFilterModelChange}
+        onRowClick={(params) => setViewingCopiesBook(params.row as Book)}
+        sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' } }}
+      />
 
       <BookFormDialog
         key={formKey}

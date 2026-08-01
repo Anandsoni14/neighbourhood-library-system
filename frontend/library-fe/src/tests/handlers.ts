@@ -273,20 +273,25 @@ export const handlers = [
     const categoryId = url.searchParams.get('category_id');
     const isbn = url.searchParams.get('isbn');
     const archived = url.searchParams.get('archived') ?? 'active';
+    const inStockParam = url.searchParams.get('in_stock');
     const sortBy = (url.searchParams.get('sort_by') ?? 'title') as keyof (typeof books)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
+
+    const hasAvailableCopy = (bookId: string) =>
+      copies.some((copy) => copy.book_id === bookId && copy.status === 'AVAILABLE');
 
     const filtered = books.filter(
       (book) =>
         matches(book.title, title) &&
         matches(book.author, author) &&
         (categoryId ? book.category_id === categoryId : true) &&
-        matches(book.isbn, isbn, true) &&
+        matches(book.isbn, isbn) &&
         (archived === 'all'
           ? true
           : archived === 'archived'
             ? book.is_archived
-            : !book.is_archived),
+            : !book.is_archived) &&
+        (inStockParam === null ? true : hasAvailableCopy(book.book_id) === (inStockParam === 'true')),
     );
 
     const sorted = [...filtered].sort((a, b) => {

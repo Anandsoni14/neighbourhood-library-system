@@ -54,6 +54,7 @@ export interface ListBooksParams {
   categoryId?: string;
   isbn?: string;
   archived?: BookArchiveFilter;
+  inStock?: boolean;
   sortBy: BookSortField;
   sortDir: SortDir;
 }

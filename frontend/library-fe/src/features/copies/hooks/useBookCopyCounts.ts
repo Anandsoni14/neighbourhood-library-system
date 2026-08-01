@@ -11,12 +11,12 @@ interface CopyCounts {
   available: number;
 }
 
-/**
- * Resolves "N available / M total" copy counts per book for BooksPage.
- * Not Redux — this is page-scoped derived data, like useLoanEnrichment.
- * Each book costs two `limit: 1` list calls (total count, available count) —
- * cheap since only `total` from the response envelope is read.
- */
+// The backend caps `limit` at 1000 (see api/pagination.py); a catalogue with
+// more copies than that would need real server-side aggregation instead.
+const MAX_COPIES_PER_FETCH = 1000;
+
+/** Resolves "N available / M total" copy counts per book in a single
+ * unfiltered request, rather than two requests per visible book. */
 export function useBookCopyCounts(bookIds: string[], reloadToken = 0): Record<string, CopyCounts> {
   const [counts, setCounts] = useState<Record<string, CopyCounts>>({});
 
@@ -31,46 +31,37 @@ export function useBookCopyCounts(bookIds: string[], reloadToken = 0): Record<st
     let cancelled = false;
 
     async function resolve() {
-      const resolved = await Promise.all(
-        ids.map(async (bookId) => {
-          try {
-            const [totalPage, availablePage] = await Promise.all([
-              copyService.list({
-                skip: 0,
-                limit: 1,
-                bookId,
-                sortBy: BookCopySortField.BARCODE,
-                sortDir: SortDir.ASC,
-              }),
-              copyService.list({
-                skip: 0,
-                limit: 1,
-                bookId,
-                status: CopyStatus.AVAILABLE,
-                sortBy: BookCopySortField.BARCODE,
-                sortDir: SortDir.ASC,
-              }),
-            ]);
-            return [bookId, { total: totalPage.total, available: availablePage.total }] as const;
-          } catch {
-            return [bookId, null] as const;
+      try {
+        const page = await copyService.list({
+          skip: 0,
+          limit: MAX_COPIES_PER_FETCH,
+          sortBy: BookCopySortField.BARCODE,
+          sortDir: SortDir.ASC,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        const next: Record<string, CopyCounts> = {};
+        for (const bookId of ids) {
+          next[bookId] = { total: 0, available: 0 };
+        }
+        for (const copy of page.items) {
+          const entry = next[copy.book_id];
+          if (!entry) {
+            continue;
           }
-        }),
-      );
-
-      if (cancelled) {
-        return;
-      }
-
-      setCounts((prev) => {
-        const next = { ...prev };
-        for (const [bookId, value] of resolved) {
-          if (value) {
-            next[bookId] = value;
+          entry.total += 1;
+          if (copy.status === CopyStatus.AVAILABLE) {
+            entry.available += 1;
           }
         }
-        return next;
-      });
+
+        setCounts((prev) => ({ ...prev, ...next }));
+      } catch {
+        // Leave existing counts as-is — affected cells just keep showing "…".
+      }
     }
 
     void resolve();

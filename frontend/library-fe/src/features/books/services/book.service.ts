@@ -23,6 +23,7 @@ export const bookService = {
         category_id: nonEmpty(params.categoryId),
         isbn: nonEmpty(params.isbn),
         archived: params.archived,
+        in_stock: params.inStock,
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },

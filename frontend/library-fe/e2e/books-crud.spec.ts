@@ -37,6 +37,9 @@ test.beforeEach(async ({ page }) => {
       json: { access_token: 'e2e-token', token_type: 'bearer', staff: STAFF_FIXTURE },
     });
   });
+  await page.route('**/api/v1/auth/me', async (route) => {
+    await route.fulfill({ json: STAFF_FIXTURE });
+  });
 
   // The dashboard every visitor lands on after login fetches these — not
   // exercised by this spec, so a minimal empty response is enough.
@@ -124,6 +127,8 @@ test.beforeEach(async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 test.describe('books catalog', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('navigates to the Books page and lists seeded books', async ({ page }) => {
     await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
 
@@ -149,7 +154,7 @@ test.describe('books catalog', () => {
     await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
     await expect(page).toHaveURL(/\/books$/);
 
-    await page.getByRole('button', { name: /edit clean code/i }).click();
+    await page.getByRole('menuitem', { name: 'Edit Clean Code' }).click();
     const dialog = page.getByRole('dialog');
     const titleField = dialog.getByLabel(/^title/i);
     await titleField.fill('Clean Code (2nd Edition)');
@@ -158,15 +163,14 @@ test.describe('books catalog', () => {
     await expect(page.getByText('Clean Code (2nd Edition)')).toBeVisible();
   });
 
-  test('archives a book, hiding it from the default active list', async ({ page }) => {
-    await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
-    await expect(page).toHaveURL(/\/books$/);
+  test('archives a book, hiding it when filtered to Active status', async ({ page }) => {
+    await page.goto('/books?status=Active');
     await expect(page.getByText('Clean Code')).toBeVisible();
 
     // Books have no delete action — only archive/unarchive (see
     // api/books.py, which exposes no DELETE /books/{id} route).
-    await page.getByRole('button', { name: /archive clean code/i }).click();
+    await page.getByRole('menuitem', { name: 'Archive Clean Code' }).click();
 
-    await expect(page.getByText('No books found.')).toBeVisible();
+    await expect(page.getByText(/no rows/i)).toBeVisible();
   });
 });
