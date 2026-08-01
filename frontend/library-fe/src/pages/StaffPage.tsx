@@ -6,22 +6,19 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import IconButton from '@mui/material/IconButton';
-import LinearProgress from '@mui/material/LinearProgress';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
-import TableRow from '@mui/material/TableRow';
-import TableSortLabel from '@mui/material/TableSortLabel';
-import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { type ChangeEvent, useEffect, useState } from 'react';
+import {
+  GridActionsCellItem,
+  type GridColDef,
+  type GridFilterModel,
+  type GridRowParams,
+  type GridSortModel,
+} from '@mui/x-data-grid';
+import { useEffect, useMemo, useState } from 'react';
 
+import { DataTable } from '@/components/DataTable';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { StaffFormDialog } from '@/features/staff/components/StaffFormDialog';
@@ -32,24 +29,65 @@ import type {
   StaffCreateRequest,
   StaffUpdateRequest,
 } from '@/features/staff/types/staff.types';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { StaffRole, StaffStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
+import {
+  containsOnlyOperators,
+  equalsOnlyOperators,
+  filtersFromFilterModel,
+} from '@/utils/gridFilterOperators';
 
-const FILTER_DEBOUNCE_MS = 300;
+type Filters = Record<'employeeCode' | 'name' | 'email' | 'phone' | 'role' | 'status', string>;
 
-interface SortableColumn {
-  field: StaffSortField;
-  label: string;
+const emptyFilters: Filters = {
+  employeeCode: '',
+  name: '',
+  email: '',
+  phone: '',
+  role: '',
+  status: '',
+};
+
+// No default filter: MUI Community's filter panel only supports one active
+// filter at a time, so pre-setting Status would block filtering by anything else.
+const defaultFilters: Filters = emptyFilters;
+
+const ROLE_OPTIONS = ['Admin', 'Librarian'];
+const STATUS_OPTIONS = ['Active', 'Inactive'];
+
+function roleToStaffRole(role: string): StaffRole | undefined {
+  if (role === 'Admin') {
+    return StaffRole.ADMIN;
+  }
+  if (role === 'Librarian') {
+    return StaffRole.LIBRARIAN;
+  }
+  return undefined;
 }
 
-const columns: SortableColumn[] = [
-  { field: StaffSortField.EMPLOYEE_CODE, label: 'Employee code' },
-  { field: StaffSortField.FIRST_NAME, label: 'First name' },
-  { field: StaffSortField.LAST_NAME, label: 'Last name' },
-  { field: StaffSortField.EMAIL, label: 'Email' },
-];
+function statusToStaffStatus(status: string): StaffStatus | undefined {
+  if (status === 'Active') {
+    return StaffStatus.ACTIVE;
+  }
+  if (status === 'Inactive') {
+    return StaffStatus.INACTIVE;
+  }
+  return undefined;
+}
+
+// The DataGrid shows one merged "Name" column (the backend's `name` filter
+// already matches first-or-last), sorted by last name.
+function toBackendSortField(gridField: string): StaffSortField {
+  return gridField === 'name' ? StaffSortField.LAST_NAME : (gridField as StaffSortField);
+}
+
+function toGridField(backendField: string): string {
+  return backendField === StaffSortField.LAST_NAME || backendField === StaffSortField.FIRST_NAME
+    ? 'name'
+    : backendField;
+}
 
 export function StaffPage() {
   useDocumentTitle('Staff');
@@ -70,12 +108,20 @@ export function StaffPage() {
     clearMutationError,
   } = useStaff();
 
-  const [name, setName] = useState('');
-  const debouncedName = useDebouncedValue(name, FILTER_DEBOUNCE_MS);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [sortBy, setSortBy] = useState<StaffSortField>(StaffSortField.EMPLOYEE_CODE);
-  const [sortDir, setSortDir] = useState<SortDir>(SortDir.ASC);
+  const {
+    filters,
+    debouncedFilters,
+    setFilters,
+    page,
+    pageSize,
+    setPagination,
+    sortField,
+    sortDir,
+    setSort,
+  } = useTableQueryParams<Filters>({
+    defaultFilters,
+    defaultSortField: StaffSortField.EMPLOYEE_CODE,
+  });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
@@ -83,20 +129,44 @@ export function StaffPage() {
 
   const isAdmin = currentStaff?.role === StaffRole.ADMIN;
 
+  const fetchParams = {
+    skip: page * pageSize,
+    limit: pageSize,
+    name: debouncedFilters.name || undefined,
+    employeeCode: debouncedFilters.employeeCode || undefined,
+    email: debouncedFilters.email || undefined,
+    phoneNumber: debouncedFilters.phone || undefined,
+    role: roleToStaffRole(debouncedFilters.role),
+    status: statusToStaffStatus(debouncedFilters.status),
+    sortBy: sortField as StaffSortField,
+    sortDir,
+  };
+
   useEffect(() => {
     if (!isAdmin) {
       return;
     }
-    void fetchStaff({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      name: debouncedName,
-      sortBy,
-      sortDir,
-    });
+    void fetchStaff(fetchParams);
     // fetchStaff is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, page, rowsPerPage, sortBy, sortDir, debouncedName]);
+  }, [isAdmin, page, pageSize, sortField, sortDir, debouncedFilters]);
+
+  // Hooks below (useState/useMemo) must run unconditionally on every render,
+  // so the admin-only early return happens after them, not before.
+  const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
+    items: (Object.keys(filters) as (keyof Filters)[])
+      .filter((key) => filters[key])
+      .map((key) => ({
+        field: key,
+        operator: key === 'role' || key === 'status' ? 'is' : 'contains',
+        value: filters[key],
+      })),
+  }));
+  const paginationModel = useMemo(() => ({ page, pageSize }), [page, pageSize]);
+  const sortModel: GridSortModel = useMemo(
+    () => [{ field: toGridField(sortField), sort: sortDir }],
+    [sortField, sortDir],
+  );
 
   if (!isAdmin) {
     return (
@@ -109,25 +179,7 @@ export function StaffPage() {
     );
   }
 
-  const refetch = () => {
-    void fetchStaff({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      name,
-      sortBy,
-      sortDir,
-    });
-  };
-
-  const handleSort = (field: StaffSortField) => {
-    if (field === sortBy) {
-      setSortDir(sortDir === SortDir.ASC ? SortDir.DESC : SortDir.ASC);
-    } else {
-      setSortBy(field);
-      setSortDir(SortDir.ASC);
-    }
-    setPage(0);
-  };
+  const refetch = () => void fetchStaff(fetchParams);
 
   const openAddDialog = () => {
     setEditingStaff(null);
@@ -168,6 +220,110 @@ export function StaffPage() {
     }
   };
 
+  const handleFilterModelChange = (model: GridFilterModel) => {
+    setFilterModel(model);
+    setFilters(filtersFromFilterModel(model, emptyFilters));
+  };
+
+  const handleSortModelChange = (model: GridSortModel) => {
+    const item = model[0];
+    if (item?.sort) {
+      setSort(toBackendSortField(item.field), item.sort === 'desc' ? SortDir.DESC : SortDir.ASC);
+    }
+  };
+
+  const columns: GridColDef<Staff>[] = [
+    {
+      field: 'employeeCode',
+      headerName: 'Employee code',
+      flex: 0.8,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => row.employee_code,
+    },
+    {
+      field: 'name',
+      headerName: 'Name',
+      flex: 1,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => `${row.first_name} ${row.last_name}`,
+    },
+    { field: 'email', headerName: 'Email', flex: 1, filterOperators: containsOnlyOperators },
+    {
+      field: 'phone',
+      headerName: 'Phone',
+      flex: 0.8,
+      sortable: false,
+      filterOperators: containsOnlyOperators,
+      valueGetter: (_value, row) => row.phone_number ?? '—',
+    },
+    {
+      field: 'role',
+      headerName: 'Role',
+      width: 130,
+      type: 'singleSelect',
+      valueOptions: ROLE_OPTIONS,
+      filterOperators: equalsOnlyOperators,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.row.role}
+          color={params.row.role === StaffRole.ADMIN ? 'info' : 'default'}
+          variant="outlined"
+        />
+      ),
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 130,
+      type: 'singleSelect',
+      valueOptions: STATUS_OPTIONS,
+      filterOperators: equalsOnlyOperators,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.row.status}
+          color={params.row.status === StaffStatus.ACTIVE ? 'success' : 'default'}
+          variant="outlined"
+        />
+      ),
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 100,
+      getActions: (params: GridRowParams<Staff>) => {
+        const name = `${params.row.first_name} ${params.row.last_name}`;
+        const isActive = params.row.status === StaffStatus.ACTIVE;
+        return [
+          <Tooltip key="edit" title={`Edit ${name}`}>
+            <GridActionsCellItem
+              icon={<EditOutlinedIcon fontSize="small" />}
+              label={`Edit ${name}`}
+              onClick={() => openEditDialog(params.row)}
+              showInMenu={false}
+            />
+          </Tooltip>,
+          <Tooltip key="toggle" title={isActive ? `Deactivate ${name}` : `Activate ${name}`}>
+            <GridActionsCellItem
+              icon={
+                isActive ? (
+                  <BlockOutlinedIcon fontSize="small" />
+                ) : (
+                  <CheckCircleOutlineOutlinedIcon fontSize="small" />
+                )
+              }
+              label={isActive ? `Deactivate ${name}` : `Activate ${name}`}
+              onClick={() => void handleToggleStatus(params.row)}
+              showInMenu={false}
+            />
+          </Tooltip>,
+        ];
+      },
+    },
+  ];
+
   return (
     <Box>
       <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -179,118 +335,26 @@ export function StaffPage() {
         </Button>
       </Stack>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <TextField
-          label="Name"
-          value={name}
-          onChange={(event: ChangeEvent<HTMLInputElement>) => {
-            setName(event.target.value);
-            setPage(0);
-          }}
-          sx={{ minWidth: 220 }}
-        />
-      </Paper>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Paper>
-        {isLoading && <LinearProgress />}
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableCell key={column.field}>
-                    <TableSortLabel
-                      active={sortBy === column.field}
-                      direction={sortBy === column.field ? sortDir : SortDir.ASC}
-                      onClick={() => handleSort(column.field)}
-                    >
-                      {column.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-                <TableCell>Role</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {staff.length === 0 && !isLoading && (
-                <TableRow>
-                  <TableCell colSpan={columns.length + 3} align="center">
-                    No staff found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {staff.map((member) => (
-                <TableRow key={member.staff_id} hover>
-                  <TableCell>{member.employee_code}</TableCell>
-                  <TableCell>{member.first_name}</TableCell>
-                  <TableCell>{member.last_name}</TableCell>
-                  <TableCell>{member.email}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={member.role}
-                      color={member.role === StaffRole.ADMIN ? 'info' : 'default'}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={member.status}
-                      color={member.status === StaffStatus.ACTIVE ? 'success' : 'default'}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      aria-label={`Edit ${member.first_name} ${member.last_name}`}
-                      onClick={() => openEditDialog(member)}
-                    >
-                      <EditOutlinedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      aria-label={
-                        member.status === StaffStatus.ACTIVE
-                          ? `Deactivate ${member.first_name} ${member.last_name}`
-                          : `Activate ${member.first_name} ${member.last_name}`
-                      }
-                      onClick={() => void handleToggleStatus(member)}
-                    >
-                      {member.status === StaffStatus.ACTIVE ? (
-                        <BlockOutlinedIcon fontSize="small" />
-                      ) : (
-                        <CheckCircleOutlineOutlinedIcon fontSize="small" />
-                      )}
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_event, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => {
-            setRowsPerPage(Number(event.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
-      </Paper>
+      <DataTable
+        columns={columns}
+        rows={staff}
+        getRowId={(row: Staff) => row.staff_id}
+        rowCount={total}
+        loading={isLoading}
+        autoHeight
+        paginationModel={paginationModel}
+        onPaginationModelChange={(model) => setPagination(model.page, model.pageSize)}
+        sortModel={sortModel}
+        onSortModelChange={handleSortModelChange}
+        filterModel={filterModel}
+        onFilterModelChange={handleFilterModelChange}
+      />
 
       <StaffFormDialog
         key={formKey}
