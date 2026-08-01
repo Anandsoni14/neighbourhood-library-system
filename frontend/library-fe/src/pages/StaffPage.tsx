@@ -1,13 +1,9 @@
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import {
   type GridColDef,
   type GridFilterModel,
@@ -19,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DataTable } from '@/components/DataTable';
 import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
+import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { StaffFormDialog } from '@/features/staff/components/StaffFormDialog';
 import { useStaff } from '@/features/staff/hooks/useStaff';
@@ -167,9 +164,7 @@ export function StaffPage() {
   if (!isAdmin) {
     return (
       <Box>
-        <Typography component="h2" variant="h4" sx={{ mb: 2 }}>
-          Staff
-        </Typography>
+        <PageHeader title="Staff" />
         <Alert severity="warning">Only admins can manage staff accounts.</Alert>
       </Box>
     );
@@ -317,14 +312,7 @@ export function StaffPage() {
 
   return (
     <Box>
-      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography component="h2" variant="h4">
-          Staff
-        </Typography>
-        <Button variant="contained" startIcon={<AddOutlinedIcon />} onClick={openAddDialog}>
-          Add staff member
-        </Button>
-      </Stack>
+      <PageHeader title="Staff" actionLabel="Add staff member" onAction={openAddDialog} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

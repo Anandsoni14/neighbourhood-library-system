@@ -1,12 +1,8 @@
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import {
   type GridColDef,
   type GridFilterModel,
@@ -19,6 +15,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
 import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
+import { PageHeader } from '@/components/PageHeader';
 import { MemberLoanHistoryDialog } from '@/features/loans/components/MemberLoanHistoryDialog';
 import { MemberFormDialog } from '@/features/members/components/MemberFormDialog';
 import { useMembers } from '@/features/members/hooks/useMembers';
@@ -254,14 +251,7 @@ export function MembersPage() {
 
   return (
     <Box>
-      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography component="h2" variant="h4">
-          Members
-        </Typography>
-        <Button variant="contained" startIcon={<AddOutlinedIcon />} onClick={openAddDialog}>
-          Add member
-        </Button>
-      </Stack>
+      <PageHeader title="Members" actionLabel="Add member" onAction={openAddDialog} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

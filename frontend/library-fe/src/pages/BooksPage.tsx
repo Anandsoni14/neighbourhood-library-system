@@ -1,14 +1,10 @@
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import {
   type GridColDef,
   type GridFilterModel,
@@ -20,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DataTable } from '@/components/DataTable';
 import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
+import { PageHeader } from '@/components/PageHeader';
 import { BookFormDialog } from '@/features/books/components/BookFormDialog';
 import { useBooks } from '@/features/books/hooks/useBooks';
 import { BookArchiveFilter, BookSortField } from '@/features/books/types/book.types';
@@ -327,14 +324,7 @@ export function BooksPage() {
 
   return (
     <Box>
-      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography component="h2" variant="h4">
-          Books
-        </Typography>
-        <Button variant="contained" startIcon={<AddOutlinedIcon />} onClick={openAddDialog}>
-          Add book
-        </Button>
-      </Stack>
+      <PageHeader title="Books" actionLabel="Add book" onAction={openAddDialog} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

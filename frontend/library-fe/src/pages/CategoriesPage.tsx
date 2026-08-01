@@ -1,13 +1,9 @@
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
 import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import Stack from '@mui/material/Stack';
-import Typography from '@mui/material/Typography';
 import {
   type GridColDef,
   type GridFilterModel,
@@ -19,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DataTable } from '@/components/DataTable';
 import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
+import { PageHeader } from '@/components/PageHeader';
 import { CategoryFormDialog } from '@/features/categories/components/CategoryFormDialog';
 import { useCategories } from '@/features/categories/hooks/useCategories';
 import {
@@ -229,14 +226,7 @@ export function CategoriesPage() {
 
   return (
     <Box>
-      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography component="h2" variant="h4">
-          Categories
-        </Typography>
-        <Button variant="contained" startIcon={<AddOutlinedIcon />} onClick={openAddDialog}>
-          Add category
-        </Button>
-      </Stack>
+      <PageHeader title="Categories" actionLabel="Add category" onAction={openAddDialog} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>

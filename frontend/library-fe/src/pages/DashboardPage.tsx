@@ -25,6 +25,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { DataTable } from '@/components/DataTable';
 import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
+import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import type { Book } from '@/features/books/types/book.types';
 import { BookCopiesDialog } from '@/features/copies/components/BookCopiesDialog';
@@ -274,9 +275,7 @@ export function DashboardPage() {
 
   return (
     <Box>
-      <Typography component="h2" variant="h4" sx={{ mb: 1 }}>
-        Dashboard
-      </Typography>
+      <PageHeader title="Dashboard" />
       {staff && (
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
           Welcome back, {staff.first_name}.
