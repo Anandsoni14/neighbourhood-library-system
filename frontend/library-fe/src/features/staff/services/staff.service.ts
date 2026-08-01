@@ -1,4 +1,5 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 import type { Page } from '@/types/api';
 
 import type {
@@ -17,38 +18,36 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const staffService = {
-  async list(params: ListStaffParams): Promise<Page<Staff>> {
-    const { data } = await httpClient.get<Page<Staff>>('/staff', {
+  list(params: ListStaffParams): Promise<Page<Staff>> {
+    return httpClient.get<Page<Staff>>(ENDPOINTS.staff.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
         name: nonEmpty(params.name),
+        employee_code: nonEmpty(params.employeeCode),
+        email: nonEmpty(params.email),
+        phone_number: nonEmpty(params.phoneNumber),
         role: params.role,
         status: params.status,
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async create(payload: StaffCreateRequest): Promise<Staff> {
-    const { data } = await httpClient.post<Staff>('/staff', payload);
-    return data;
+  create(payload: StaffCreateRequest): Promise<Staff> {
+    return httpClient.post<Staff>(ENDPOINTS.staff.list, payload);
   },
 
-  async update(staffId: string, payload: StaffUpdateRequest): Promise<Staff> {
-    const { data } = await httpClient.put<Staff>(`/staff/${staffId}`, payload);
-    return data;
+  update(staffId: string, payload: StaffUpdateRequest): Promise<Staff> {
+    return httpClient.put<Staff>(ENDPOINTS.staff.byId(staffId), payload);
   },
 
-  async activate(staffId: string): Promise<Staff> {
-    const { data } = await httpClient.post<Staff>(`/staff/${staffId}/activate`);
-    return data;
+  activate(staffId: string): Promise<Staff> {
+    return httpClient.post<Staff>(ENDPOINTS.staff.activate(staffId));
   },
 
-  async deactivate(staffId: string): Promise<Staff> {
-    const { data } = await httpClient.post<Staff>(`/staff/${staffId}/deactivate`);
-    return data;
+  deactivate(staffId: string): Promise<Staff> {
+    return httpClient.post<Staff>(ENDPOINTS.staff.deactivate(staffId));
   },
 };

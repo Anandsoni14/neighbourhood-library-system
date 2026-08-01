@@ -46,12 +46,8 @@ const statusColors: Record<CopyStatus, 'success' | 'warning' | 'error' | 'defaul
   [CopyStatus.MAINTENANCE]: 'default',
 };
 
-/**
- * Copies management scoped to a single book — reached from BooksPage's
- * "View copies" action. Mirrors CopiesPage's CRUD flow (same hook, same
- * CopyFormDialog) but pre-filtered to `book.book_id` instead of exposing a
- * free-text book filter.
- */
+/** Copies management scoped to a single book, reached from BooksPage's "View
+ * copies" action. Mirrors CopiesPage's CRUD flow but pre-filtered to `book.book_id`. */
 export function BookCopiesDialog({ open, book, onClose, onCopiesChanged }: BookCopiesDialogProps) {
   const {
     copies,

@@ -1,19 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { SortDir } from '@/types/common';
 
 import { bookService } from './book.service';
 import { BookSortField } from '../types/book.types';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    },
+  };
+});
 
 const book = {
   book_id: '1',
@@ -30,9 +35,7 @@ const book = {
 
 describe('bookService', () => {
   it('lists books, omitting blank filters and forwarding sort/pagination', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({
-      data: { items: [book], total: 1, skip: 0, limit: 25 },
-    });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [book], total: 1, skip: 0, limit: 25 });
 
     const result = await bookService.list({
       skip: 0,
@@ -60,7 +63,7 @@ describe('bookService', () => {
   });
 
   it('fetches a single book by id', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ data: book });
+    vi.mocked(httpClient.get).mockResolvedValue(book);
 
     const result = await bookService.get('1');
 
@@ -69,7 +72,7 @@ describe('bookService', () => {
   });
 
   it('creates a book', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: book });
+    vi.mocked(httpClient.post).mockResolvedValue(book);
 
     const payload = { title: 'Clean Code', author: 'Robert C. Martin' };
     const result = await bookService.create(payload);
@@ -79,7 +82,7 @@ describe('bookService', () => {
   });
 
   it('updates a book', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue({ data: book });
+    vi.mocked(httpClient.put).mockResolvedValue(book);
 
     const payload = { title: 'Clean Code', author: 'Robert C. Martin' };
     const result = await bookService.update('1', payload);
@@ -89,7 +92,7 @@ describe('bookService', () => {
   });
 
   it('archives a book', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: { ...book, is_archived: true } });
+    vi.mocked(httpClient.post).mockResolvedValue({ ...book, is_archived: true });
 
     const result = await bookService.archive('1');
 
@@ -98,7 +101,7 @@ describe('bookService', () => {
   });
 
   it('unarchives a book', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: book });
+    vi.mocked(httpClient.post).mockResolvedValue(book);
 
     const result = await bookService.unarchive('1');
 

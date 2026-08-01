@@ -13,13 +13,8 @@ if TYPE_CHECKING:
 
 
 class Category(Base, TimestampMixin):
-    """A book category.
-
-    Replaces the free-text `book.category` string that preceded it, so the
-    catalogue has one authoritative vocabulary: renaming a category updates
-    every book at once, and the UI can offer a real dropdown instead of
-    inviting a new spelling on every entry.
-    """
+    """A book category — replaces the old free-text `book.category` string
+    with one authoritative, renameable vocabulary."""
 
     __tablename__ = "category"
     __table_args__ = (

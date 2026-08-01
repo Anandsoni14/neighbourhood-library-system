@@ -46,18 +46,19 @@ class CategoryService:
         self,
         *,
         name: str | None = None,
-        include_archived: bool = False,
+        is_archived: bool | None = False,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Category], int]:
-        """List categories matching every supplied filter, returning the page and total."""
+        """List categories matching every filter. `is_archived`: False/True/None
+        = active/archived/both."""
         filters: list[ColumnElement[bool]] = []
         if name:
             filters.append(Category.name.ilike(f"%{name}%"))
-        if not include_archived:
-            filters.append(Category.is_archived.is_(False))
+        if is_archived is not None:
+            filters.append(Category.is_archived.is_(is_archived))
 
         categories, total = await self.repository.list_paginated(
             filters=filters,
@@ -87,11 +88,7 @@ class CategoryService:
         return category
 
     async def archive_category(self, category_id: UUID) -> Category:
-        """Archive a category, hiding it from the default listing and the book form.
-
-        Idempotent: archiving an already-archived category is a no-op rather than
-        an error, so a double-click or a retried request behaves the same as one.
-        """
+        """Archive a category, hiding it from listings and the book form. Idempotent."""
         category = await self.get_category(category_id)
         category.is_archived = True
         self._session.add(category)

@@ -1,20 +1,13 @@
 """Idempotent sample-data seed.
 
-Run by scripts/entrypoint.sh, after migrations, only when SEED_SAMPLE_DATA=true
-(see docker-compose.yml). Never invoked by pytest: tests/conftest.py points at
-a completely separate database (test_database_url), so this script and the
-test suite never touch the same rows.
+Run by scripts/entrypoint.sh after migrations, only when SEED_SAMPLE_DATA=true.
+Never invoked by pytest (a separate test_database_url is used instead).
 
-Idempotency strategy: every row's primary key is derived deterministically via
-uuid5(SEED_NAMESPACE, "<kind>:<natural-key>"), so re-running this script (e.g.
-`docker compose restart backend`) against an already-seeded database inserts
-nothing new. For `staff`, `member`, and `book`, existence is checked by natural
-key (email/email/isbn) rather than by that derived PK — the admin account
-(admin@locallibrary.com, employee_code LL-001) may already exist in a database
-seeded by hand before this script existed, under a *different*, randomly
-generated PK, and a PK-only check would miss that row and then crash on the
-unique email/employee_code constraint. Existing rows are never updated: a
-developer's local edits survive a restart.
+PKs are derived deterministically via uuid5(SEED_NAMESPACE, "<kind>:<key>"), so
+re-running against an already-seeded DB inserts nothing new. `staff`/`member`/
+`book` are additionally checked by natural key (email/email/isbn), since a
+hand-seeded admin account could predate this script under a different PK.
+Existing rows are never updated, so local edits survive a restart.
 """
 
 import asyncio
@@ -190,11 +183,8 @@ async def _get_or_create_copy(
 async def _get_or_create_loan(
     session: AsyncSession, *, key: str, **fields: object
 ) -> tuple[Loan, bool]:
-    """Returns (loan, created). Callers use `created` to decide whether the
-    associated copy's status/condition should be mutated to match — only on
-    the run that actually creates the loan, never on a skip, so a real status
-    change made through the app afterward isn't clobbered by a later reseed.
-    """
+    """Returns (loan, created); callers only mutate the copy's status/condition
+    when `created` is True, so a later reseed can't clobber a real status change."""
     loan_id = _seed_id(f"loan:{key}")
     existing = await session.get(Loan, loan_id)
     if existing:

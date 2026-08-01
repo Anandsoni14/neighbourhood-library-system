@@ -15,12 +15,8 @@ class LoanRepository(BaseRepository[Loan]):
         super().__init__(session, Loan)
 
     async def get_active_loan_for_copy(self, copy_id: UUID) -> Loan | None:
-        """Fetch the current ACTIVE loan for a copy, if any.
-
-        Mirrors the DB's partial unique index (one_active_loan_per_copy)
-        predicate exactly. This is a friendly pre-check only — the index
-        itself is the authoritative concurrency guard.
-        """
+        """Fetch the current ACTIVE loan for a copy, if any — a friendly
+        pre-check; the DB's unique index is the authoritative guard."""
         result = await self._session.execute(
             select(Loan).where(Loan.copy_id == copy_id, Loan.status == LoanStatus.ACTIVE)
         )

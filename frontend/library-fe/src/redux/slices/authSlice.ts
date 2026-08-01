@@ -26,9 +26,8 @@ const persistedToken = readPersistedToken();
 const initialState: AuthState = {
   token: persistedToken,
   staff: null,
-  // A persisted token's validity is unknown until fetchCurrentStaff confirms
-  // it — starting at LOADING lets ProtectedRoute show a spinner instead of
-  // bouncing straight to /login while that check is in flight.
+  // LOADING until fetchCurrentStaff confirms the persisted token, so
+  // ProtectedRoute shows a spinner instead of bouncing to /login.
   status: persistedToken ? RequestStatus.LOADING : RequestStatus.IDLE,
   error: null,
 };
@@ -93,10 +92,8 @@ const authSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchCurrentStaff.rejected, (state, action) => {
-        // The persisted token is invalid or expired. The 401 interceptor
-        // also dispatches logout for calls made mid-session; clearing here
-        // too keeps this slice correct standalone (e.g. under test) even
-        // without the interceptor wired up.
+        // Persisted token is invalid/expired; clear it here too so this
+        // slice is correct standalone even without the 401 interceptor wired up.
         state.token = null;
         state.staff = null;
         state.status = RequestStatus.IDLE;

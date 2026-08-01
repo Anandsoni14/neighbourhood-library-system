@@ -40,12 +40,9 @@ class TransactionService:
         loan_id: UUID | None = None,
         payment_reference: str | None = None,
     ) -> Transaction:
-        """Record a new fee or waiver against a member's ledger.
-
-        LATE_FEE/DAMAGE_FEE transactions start PENDING and are later settled via
-        record_payment/mark_failed/waive. A WAIVER is itself a settled event — it
-        is created directly with status WAIVED (there's nothing left to collect).
-        """
+        """Record a new fee or waiver. LATE_FEE/DAMAGE_FEE start PENDING and are
+        settled later via record_payment/mark_failed/waive; WAIVER is created
+        already WAIVED."""
         member = await self._member_repository.get_by_id(member_id)
         if not member:
             raise NotFoundError(f"Member {member_id} not found")
@@ -158,11 +155,7 @@ class TransactionService:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Transaction], int]:
-        """List transactions matching every supplied filter, returning page and total.
-
-        Filters combine, so "this member's outstanding fees" — member plus
-        PENDING status — is a single request.
-        """
+        """List transactions matching every supplied filter, returning page and total."""
         filters: list[ColumnElement[bool]] = []
         if member_id is not None:
             filters.append(Transaction.member_id == member_id)

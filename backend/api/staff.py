@@ -109,6 +109,9 @@ async def list_staff(
     role: StaffRole | None = Query(None),
     status: StaffStatus | None = Query(None),
     name: str | None = Query(None, description="Matches first or last name."),
+    employee_code: str | None = Query(None, description="Case-insensitive substring match."),
+    email: str | None = Query(None, description="Case-insensitive substring match."),
+    phone_number: str | None = Query(None, description="Case-insensitive substring match."),
     sort_by: StaffSortField = Query(StaffSortField.EMPLOYEE_CODE),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
@@ -120,6 +123,9 @@ async def list_staff(
         role=role,
         status=status,
         name=name,
+        employee_code=employee_code,
+        email=email,
+        phone_number=phone_number,
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
@@ -174,11 +180,7 @@ async def deactivate_staff(
     db: AsyncSession = Depends(get_db),
     current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
-    """Deactivate a staff member. ADMIN only.
-
-    Refuses self-deactivation and deactivating the last active admin — see
-    StaffService.deactivate_staff for why those guards live in the service.
-    """
+    """Deactivate a staff member. ADMIN only (guards in StaffService.deactivate_staff)."""
     service = StaffService(db)
     staff = await service.deactivate_staff(staff_id, acting_staff_id=current_staff.staff_id)
     return StaffResponse.model_validate(staff)

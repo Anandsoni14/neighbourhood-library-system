@@ -55,7 +55,7 @@ class TestCategoryService:
         assert active.category_id in ids
         assert archived.category_id not in ids
 
-    async def test_list_categories_include_archived(
+    async def test_list_categories_is_archived_none_includes_both(
         self, category_service: CategoryService
     ) -> None:
         active = await category_service.create_category(name="List Include Active")
@@ -63,11 +63,26 @@ class TestCategoryService:
         await category_service.archive_category(archived.category_id)
 
         results, total = await category_service.list_categories(
-            name="List Include", include_archived=True
+            name="List Include", is_archived=None
         )
 
         assert total == 2
         assert {active.category_id, archived.category_id} == {c.category_id for c in results}
+
+    async def test_list_categories_is_archived_true_returns_only_archived(
+        self, category_service: CategoryService
+    ) -> None:
+        active = await category_service.create_category(name="List Archived Active")
+        archived = await category_service.create_category(name="List Archived Archived")
+        await category_service.archive_category(archived.category_id)
+
+        results, total = await category_service.list_categories(
+            name="List Archived", is_archived=True
+        )
+
+        assert total == 1
+        assert results[0].category_id == archived.category_id
+        assert active.category_id not in {c.category_id for c in results}
 
     async def test_update_category(self, category_service: CategoryService) -> None:
         category = await category_service.create_category(name="Original Name")
@@ -153,10 +168,17 @@ class TestCategoriesAPI:
 
         included_response = await client.get(
             "/api/v1/categories",
-            params={"name": "List Endpoint Archived", "include_archived": "true"},
+            params={"name": "List Endpoint Archived", "archived": "all"},
             headers=librarian_headers,
         )
         assert included_response.json()["total"] == 1
+
+        archived_only_response = await client.get(
+            "/api/v1/categories",
+            params={"name": "List Endpoint Archived", "archived": "archived"},
+            headers=librarian_headers,
+        )
+        assert archived_only_response.json()["total"] == 1
 
     async def test_update_category_endpoint(
         self, client: AsyncClient, librarian_headers: dict[str, str]

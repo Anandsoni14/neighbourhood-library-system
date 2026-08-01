@@ -32,6 +32,21 @@ _SORT_COLUMNS = {
 }
 
 
+class CategoryArchiveFilter(StrEnum):
+    """Tri-state so "archived only" is expressible, not just "active plus archived"."""
+
+    ACTIVE = "active"
+    ARCHIVED = "archived"
+    ALL = "all"
+
+
+_ARCHIVE_FILTERS: dict[CategoryArchiveFilter, bool | None] = {
+    CategoryArchiveFilter.ACTIVE: False,
+    CategoryArchiveFilter.ARCHIVED: True,
+    CategoryArchiveFilter.ALL: None,
+}
+
+
 class CategoryCreateRequest(BaseModel):
     """Request schema for creating a category."""
 
@@ -71,16 +86,16 @@ async def create_category(
 async def list_categories(
     pagination: PaginationParams = Depends(),
     name: str | None = Query(None, description="Case-insensitive substring match."),
-    include_archived: bool = Query(False),
+    archived: CategoryArchiveFilter = Query(CategoryArchiveFilter.ACTIVE),
     sort_by: CategorySortField = Query(CategorySortField.NAME),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
 ) -> Page[CategoryResponse]:
-    """List categories. Archived categories are excluded unless asked for."""
+    """List categories. Filters combine; archived ones are excluded by default."""
     service = CategoryService(db)
     categories, total = await service.list_categories(
         name=name,
-        include_archived=include_archived,
+        is_archived=_ARCHIVE_FILTERS[archived],
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
@@ -107,9 +122,8 @@ async def update_category(
     return CategoryResponse.model_validate(category)
 
 
-# Deliberately no DELETE: book.category_id is ondelete=RESTRICT, so deleting any
-# category that has ever been used would always 409. Archiving is what the UI
-# actually needs, and unlike a delete it is reversible.
+# Deliberately no DELETE: book.category_id is ondelete=RESTRICT, so deleting
+# a used category always 409s. Archiving is the reversible equivalent.
 @router.post("/{category_id}/archive", response_model=CategoryResponse)
 async def archive_category(
     category_id: UUID, db: AsyncSession = Depends(get_db)

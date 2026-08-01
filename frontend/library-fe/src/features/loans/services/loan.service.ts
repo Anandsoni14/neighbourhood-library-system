@@ -1,4 +1,5 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 import type { Page } from '@/types/api';
 
 import type {
@@ -19,45 +20,45 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const loanService = {
-  async list(params: ListLoansParams): Promise<Page<Loan>> {
-    const { data } = await httpClient.get<Page<Loan>>('/loans', {
+  list(params: ListLoansParams): Promise<Page<Loan>> {
+    return httpClient.get<Page<Loan>>(ENDPOINTS.loans.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
         member_id: nonEmpty(params.memberId),
         copy_id: nonEmpty(params.copyId),
         status: params.status,
+        member_name: nonEmpty(params.memberName),
+        book_title: nonEmpty(params.bookTitle),
+        copy_barcode: nonEmpty(params.copyBarcode),
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async overdue(params: ListOverdueLoansParams): Promise<Page<OverdueLoan>> {
-    const { data } = await httpClient.get<Page<OverdueLoan>>('/loans/overdue', {
+  overdue(params: ListOverdueLoansParams): Promise<Page<OverdueLoan>> {
+    return httpClient.get<Page<OverdueLoan>>(ENDPOINTS.loans.overdue, {
       params: {
         skip: params.skip,
         limit: params.limit,
+        member_name: nonEmpty(params.memberName),
+        book_title: nonEmpty(params.bookTitle),
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async get(loanId: string): Promise<Loan> {
-    const { data } = await httpClient.get<Loan>(`/loans/${loanId}`);
-    return data;
+  get(loanId: string): Promise<Loan> {
+    return httpClient.get<Loan>(ENDPOINTS.loans.byId(loanId));
   },
 
-  async issue(payload: LoanIssueRequest): Promise<Loan> {
-    const { data } = await httpClient.post<Loan>('/loans', payload);
-    return data;
+  issue(payload: LoanIssueRequest): Promise<Loan> {
+    return httpClient.post<Loan>(ENDPOINTS.loans.list, payload);
   },
 
-  async returnLoan(loanId: string, payload: LoanReturnRequest): Promise<Loan> {
-    const { data } = await httpClient.post<Loan>(`/loans/${loanId}/return`, payload);
-    return data;
+  returnLoan(loanId: string, payload: LoanReturnRequest): Promise<Loan> {
+    return httpClient.post<Loan>(ENDPOINTS.loans.return(loanId), payload);
   },
 };

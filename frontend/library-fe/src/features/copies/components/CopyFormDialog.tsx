@@ -66,10 +66,9 @@ function valuesFromCopy(copy: BookCopy | null): FormValues {
   };
 }
 
-// Shared by CopiesPage for both "Add copy" (copy: null) and "Edit copy".
-// The caller remounts this with a fresh `key` each time it opens (see
-// CopiesPage), so fields re-seed from `copy` via the lazy initializer below
-// rather than an effect that would otherwise call setState on every render.
+// Shared for "Add copy" (copy: null) and "Edit copy". The caller remounts
+// this with a fresh `key` each time it opens, so fields re-seed from `copy`
+// via the lazy initializer below rather than an effect.
 export function CopyFormDialog({
   open,
   copy,
@@ -100,11 +99,10 @@ export function CopyFormDialog({
   const lateFeeValid =
     values.lateFeePerDay.trim() === '' ||
     (!Number.isNaN(Number(values.lateFeePerDay)) && Number(values.lateFeePerDay) >= 0);
-  // Gated on required-field presence only — the optional numeric fields keep
-  // their existing on-submit validation (below) rather than also disabling
-  // the button, so a typo mid-edit doesn't lock the form before the error
-  // message ever has a chance to explain what's wrong.
-  const canSubmit = (copy !== null || values.bookId.trim().length > 0) && values.barcode.trim().length > 0;
+  // Gated on required fields only; optional numeric fields keep their
+  // on-submit validation instead of also disabling the button.
+  const canSubmit =
+    (copy !== null || values.bookId.trim().length > 0) && values.barcode.trim().length > 0;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

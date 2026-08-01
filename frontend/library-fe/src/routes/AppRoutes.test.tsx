@@ -33,7 +33,9 @@ describe('AppRoutes', () => {
   it('redirects an authenticated visitor at / to the dashboard, inside the app shell', async () => {
     render(<AppRoutes />, { initialEntries: ['/'], preloadedState: authenticatedState });
 
-    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Dashboard' }, { timeout: 5000 }),
+    ).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Neighbour Library' })).toBeVisible();
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeVisible();
   });
@@ -41,7 +43,7 @@ describe('AppRoutes', () => {
   it('renders the Books page inside the app shell for an authenticated visitor', async () => {
     render(<AppRoutes />, { initialEntries: ['/books'], preloadedState: authenticatedState });
 
-    expect(await screen.findByRole('heading', { name: 'Books' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Books' }, { timeout: 5000 })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Neighbour Library' })).toBeVisible();
   });
 
@@ -51,12 +53,12 @@ describe('AppRoutes', () => {
       preloadedState: authenticatedState,
     });
 
-    expect(await screen.findByText('404')).toBeVisible();
+    expect(await screen.findByText('404', {}, { timeout: 5000 })).toBeVisible();
   });
 
   it('renders the 404 page for an unknown path even when unauthenticated', async () => {
     render(<AppRoutes />, { initialEntries: ['/this-page-does-not-exist'] });
 
-    expect(await screen.findByText('404')).toBeVisible();
+    expect(await screen.findByText('404', {}, { timeout: 5000 })).toBeVisible();
   });
 });

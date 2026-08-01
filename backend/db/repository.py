@@ -12,12 +12,8 @@ from db.base import Base
 
 
 class BaseRepository[ModelT: Base]:
-    """Generic persistence operations shared by all repositories.
-
-    Contains no business logic and never commits: the owning session's
-    commit/rollback boundary (see db.session.get_db) is what defines the
-    transaction for a logical operation.
-    """
+    """Generic persistence operations shared by all repositories. No business
+    logic, never commits — the owning session (db.session.get_db) owns that."""
 
     def __init__(self, session: AsyncSession, model: type[ModelT]) -> None:
         self._session = session
@@ -45,27 +41,12 @@ class BaseRepository[ModelT: Base]:
         options: Sequence[ExecutableOption] = (),
         joins: Sequence[InstrumentedAttribute[Any]] = (),
     ) -> tuple[Sequence[ModelT], int]:
-        """Return one page of rows plus the total row count matching `filters`.
+        """Return one page of rows plus the total count matching `filters`.
 
-        LIMIT/OFFSET are applied in SQL, so the database returns only the page
-        rather than the whole table for the application to slice.
-
-        `filters` is a sequence of SQLAlchemy predicates ANDed together, which is
-        what lets callers combine filters freely instead of having to pick
-        exactly one. The count query reuses the same predicates, so `total`
-        always describes the filtered set.
-
-        `joins` is a sequence of relationship attributes LEFT OUTER JOINed onto
-        both statements, so `filters`/`sort_by` may reference a related table's
-        columns (e.g. sorting books by category name). OUTER rather than INNER so
-        rows whose relationship is NULL are not silently dropped. The count query
-        gets the same joins, otherwise a filter on a joined column would raise;
-        joining many-to-one against a unique key cannot duplicate rows, so `total`
-        stays correct.
-
-        A primary-key tiebreaker is always appended to ORDER BY: without it, rows
-        with equal sort values have no guaranteed relative order between queries,
-        and a client paging through the result could see a row twice or miss one.
+        `filters` are ANDed and reused for the count query, so `total` always
+        matches the filtered set. `joins` are LEFT OUTER (so a NULL relationship
+        doesn't drop the row) and applied to both statements. A primary-key
+        tiebreaker is always appended to ORDER BY for stable paging.
         """
         where = list(filters)
 

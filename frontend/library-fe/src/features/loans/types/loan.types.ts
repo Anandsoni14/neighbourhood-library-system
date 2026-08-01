@@ -46,6 +46,9 @@ export interface ListLoansParams {
   memberId?: string;
   copyId?: string;
   status?: LoanStatus;
+  memberName?: string;
+  bookTitle?: string;
+  copyBarcode?: string;
   sortBy: LoanSortField;
   sortDir: SortDir;
 }
@@ -59,6 +62,8 @@ export interface OverdueLoan extends Loan {
 export interface ListOverdueLoansParams {
   skip: number;
   limit: number;
+  memberName?: string;
+  bookTitle?: string;
   sortBy: LoanSortField;
   sortDir: SortDir;
 }

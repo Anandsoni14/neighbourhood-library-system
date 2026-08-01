@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { CopyCondition, LoanStatus } from '@/types/api';
 import { RequestStatus } from '@/types/common';
 
-import loansReducer, { fetchLoans, issueLoan, resetMutationStatus, returnLoan } from './loansSlice';
+import loansReducer, {
+  fetchLoans,
+  fetchOverdueLoans,
+  issueLoan,
+  resetMutationStatus,
+  returnLoan,
+} from './loansSlice';
 
 const loan = {
   loan_id: '1',
@@ -23,6 +29,8 @@ const loan = {
   closed_at: null,
 };
 
+const overdueLoan = { ...loan, days_overdue: 3, estimated_fine: 15 };
+
 const initialState = {
   items: [],
   total: 0,
@@ -31,6 +39,11 @@ const initialState = {
   mutationStatus: RequestStatus.IDLE,
   mutationError: null,
   latestRequestId: 'requestId',
+  overdueItems: [],
+  overdueTotal: 0,
+  overdueStatus: RequestStatus.IDLE,
+  overdueError: null,
+  latestOverdueRequestId: 'requestId',
 };
 
 describe('loansSlice', () => {
@@ -77,6 +90,52 @@ describe('loansSlice', () => {
 
     expect(state.items).toEqual([]);
     expect(state.status).toBe(RequestStatus.LOADING);
+  });
+
+  it('fetchOverdueLoans.fulfilled stores items and total, independent of the main loans list', () => {
+    const state = loansReducer(
+      initialState,
+      fetchOverdueLoans.fulfilled({ items: [overdueLoan], total: 1 }, 'requestId', {
+        skip: 0,
+        limit: 25,
+        sortBy: 'due_at',
+        sortDir: 'asc',
+      }),
+    );
+
+    expect(state.overdueItems).toEqual([overdueLoan]);
+    expect(state.overdueTotal).toBe(1);
+    expect(state.overdueStatus).toBe(RequestStatus.SUCCEEDED);
+    expect(state.items).toEqual([]);
+  });
+
+  it('fetchOverdueLoans.rejected records the error message', () => {
+    const state = loansReducer(
+      { ...initialState, overdueStatus: RequestStatus.LOADING },
+      fetchOverdueLoans.rejected(
+        new Error('rejected'),
+        'requestId',
+        { skip: 0, limit: 25, sortBy: 'due_at', sortDir: 'asc' },
+        'Unable to load overdue loans.',
+      ),
+    );
+
+    expect(state.overdueStatus).toBe(RequestStatus.FAILED);
+    expect(state.overdueError).toBe('Unable to load overdue loans.');
+  });
+
+  it('ignores a stale fetchOverdueLoans.fulfilled response from a superseded request', () => {
+    const arg = { skip: 0, limit: 25, sortBy: 'due_at' as const, sortDir: 'asc' as const };
+    let state = loansReducer(initialState, fetchOverdueLoans.pending('old-request', arg));
+    state = loansReducer(state, fetchOverdueLoans.pending('new-request', arg));
+
+    state = loansReducer(
+      state,
+      fetchOverdueLoans.fulfilled({ items: [overdueLoan], total: 1 }, 'old-request', arg),
+    );
+
+    expect(state.overdueItems).toEqual([]);
+    expect(state.overdueStatus).toBe(RequestStatus.LOADING);
   });
 
   it('issueLoan.fulfilled marks the mutation as succeeded', () => {

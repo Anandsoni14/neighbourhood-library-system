@@ -87,16 +87,13 @@ class MemberService:
         status: MembershipStatus | None = None,
         name: str | None = None,
         email: str | None = None,
+        phone_number: str | None = None,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Member], int]:
-        """List members matching every supplied filter, returning the page and total.
-
-        `name` matches either the first or last name, so a single search box can
-        find "Ada" and "Lovelace" alike.
-        """
+        """List members matching every supplied filter. `name` matches first or last."""
         filters: list[ColumnElement[bool]] = []
         if status is not None:
             filters.append(Member.membership_status == status)
@@ -105,6 +102,8 @@ class MemberService:
             filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
         if email:
             filters.append(Member.email.ilike(f"%{email}%"))
+        if phone_number:
+            filters.append(Member.phone_number.ilike(f"%{phone_number}%"))
 
         members, total = await self.repository.list_paginated(
             filters=filters,
@@ -149,12 +148,7 @@ class MemberService:
         return member
 
     async def suspend_member(self, member_id: UUID) -> Member:
-        """Suspend a member (-> BLOCKED), blocking new loans immediately.
-
-        Idempotent, so a retried request behaves the same as the first one.
-        Enforcement is `LoanService.issue_loan`'s existing ACTIVE-only check —
-        this only flips the status that check reads.
-        """
+        """Suspend a member (-> BLOCKED), blocking new loans. Idempotent."""
         member = await self.get_member(member_id)
         member.membership_status = MembershipStatus.BLOCKED
         self._session.add(member)

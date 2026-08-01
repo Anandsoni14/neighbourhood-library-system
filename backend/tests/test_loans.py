@@ -464,6 +464,193 @@ class TestLoanService:
         assert total == 1
         assert results[0].loan_id == active_loan.loan_id
 
+    async def test_list_loans_by_member_name(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+    ) -> None:
+        copy = await _make_copy(book_service, copy_service)
+        target = await _make_member(member_service, first_name="Zoe", last_name="Searchable")
+        other = await _make_member(member_service, first_name="Other", last_name="Person")
+        other_copy = await _make_copy(book_service, copy_service)
+        staff = await _make_staff(staff_service)
+        target_loan = await loan_service.issue_loan(
+            copy_id=copy.copy_id, member_id=target.member_id, issued_by_staff_id=staff.staff_id
+        )
+        await loan_service.issue_loan(
+            copy_id=other_copy.copy_id, member_id=other.member_id, issued_by_staff_id=staff.staff_id
+        )
+
+        results, total = await loan_service.list_loans(member_name="Searchable")
+
+        assert total == 1
+        assert results[0].loan_id == target_loan.loan_id
+
+    async def test_list_loans_by_book_title(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+    ) -> None:
+        target_book = await book_service.create_book(title="Searchable Loan Title", author="Author")
+        target_copy = await copy_service.create_copy(
+            book_id=target_book.book_id, barcode=f"BC-{uuid4()}"
+        )
+        other_copy = await _make_copy(book_service, copy_service)
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+        target_loan = await loan_service.issue_loan(
+            copy_id=target_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+        await loan_service.issue_loan(
+            copy_id=other_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+
+        results, total = await loan_service.list_loans(book_title="Searchable Loan")
+
+        assert total == 1
+        assert results[0].loan_id == target_loan.loan_id
+
+    async def test_list_loans_by_copy_barcode(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+    ) -> None:
+        target_copy = await _make_copy(book_service, copy_service, barcode="SEARCHABLE-BARCODE-001")
+        other_copy = await _make_copy(book_service, copy_service)
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+        target_loan = await loan_service.issue_loan(
+            copy_id=target_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+        await loan_service.issue_loan(
+            copy_id=other_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+
+        results, total = await loan_service.list_loans(copy_barcode="SEARCHABLE-BARCODE")
+
+        assert total == 1
+        assert results[0].loan_id == target_loan.loan_id
+
+    async def test_list_loans_combines_book_title_and_status(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+    ) -> None:
+        """Filters are ANDed: a title match with a non-matching status excludes the row."""
+        book = await book_service.create_book(title="Combined Filter Title", author="Author")
+        copy_one = await copy_service.create_copy(book_id=book.book_id, barcode=f"BC-{uuid4()}")
+        copy_two = await copy_service.create_copy(book_id=book.book_id, barcode=f"BC-{uuid4()}")
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+        returned_loan = await loan_service.issue_loan(
+            copy_id=copy_one.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+        )
+        await loan_service.return_loan(
+            loan_id=returned_loan.loan_id,
+            return_condition=CopyCondition.GOOD,
+            received_by_staff_id=staff.staff_id,
+        )
+        active_loan = await loan_service.issue_loan(
+            copy_id=copy_two.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+        )
+
+        results, total = await loan_service.list_loans(
+            book_title="Combined Filter", status=LoanStatus.ACTIVE
+        )
+
+        assert total == 1
+        assert results[0].loan_id == active_loan.loan_id
+
+    async def test_get_overdue_loans_by_member_name(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+        db: AsyncSession,
+    ) -> None:
+        copy = await _make_copy(book_service, copy_service)
+        target = await _make_member(member_service, first_name="Zoe", last_name="OverdueSearchable")
+        other = await _make_member(member_service, first_name="Other", last_name="Person")
+        other_copy = await _make_copy(book_service, copy_service)
+        staff = await _make_staff(staff_service)
+        target_loan = await loan_service.issue_loan(
+            copy_id=copy.copy_id, member_id=target.member_id, issued_by_staff_id=staff.staff_id
+        )
+        other_loan = await loan_service.issue_loan(
+            copy_id=other_copy.copy_id, member_id=other.member_id, issued_by_staff_id=staff.staff_id
+        )
+        for loan in (target_loan, other_loan):
+            loan.borrowed_at = datetime.now(UTC) - timedelta(days=20)
+            loan.due_at = datetime.now(UTC) - timedelta(days=1)
+            db.add(loan)
+        await db.flush()
+
+        results, total = await loan_service.get_overdue_loans(member_name="OverdueSearchable")
+
+        assert total == 1
+        assert results[0].loan.loan_id == target_loan.loan_id
+
+    async def test_get_overdue_loans_by_book_title(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+        db: AsyncSession,
+    ) -> None:
+        target_book = await book_service.create_book(
+            title="Searchable Overdue Title", author="Author"
+        )
+        target_copy = await copy_service.create_copy(
+            book_id=target_book.book_id, barcode=f"BC-{uuid4()}"
+        )
+        other_copy = await _make_copy(book_service, copy_service)
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+        target_loan = await loan_service.issue_loan(
+            copy_id=target_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+        other_loan = await loan_service.issue_loan(
+            copy_id=other_copy.copy_id,
+            member_id=member.member_id,
+            issued_by_staff_id=staff.staff_id,
+        )
+        for loan in (target_loan, other_loan):
+            loan.borrowed_at = datetime.now(UTC) - timedelta(days=20)
+            loan.due_at = datetime.now(UTC) - timedelta(days=1)
+            db.add(loan)
+        await db.flush()
+
+        results, total = await loan_service.get_overdue_loans(book_title="Searchable Overdue")
+
+        assert total == 1
+        assert results[0].loan.loan_id == target_loan.loan_id
+
     async def test_get_loan_not_found_raises(self, loan_service: LoanService) -> None:
         with pytest.raises(LoanNotFoundException):
             await loan_service.get_loan(uuid4())
@@ -729,6 +916,60 @@ class TestLoansAPI:
         assert response.status_code == 200
         assert response.json()["total"] >= 1
 
+    async def test_list_loans_endpoint_by_book_title_filter(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+
+        response = await client.get("/api/v1/loans", params={"book_title": "API Test"})
+        assert response.status_code == 200
+        assert response.json()["total"] == 1
+
+        no_match_response = await client.get(
+            "/api/v1/loans", params={"book_title": "Nonexistent Title XYZ"}
+        )
+        assert no_match_response.json()["total"] == 0
+
+    async def test_list_loans_endpoint_by_member_name_filter(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+
+        response = await client.get("/api/v1/loans", params={"member_name": "Member"})
+        assert response.status_code == 200
+        assert response.json()["total"] == 1
+
+    async def test_list_loans_endpoint_by_copy_barcode_filter(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        loan_resp = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+        loan_id = loan_resp.json()["loan_id"]
+        copy_resp = await client.get(
+            f"/api/v1/book-copies/{ids['copy_id']}", headers=ids["headers"]
+        )
+        barcode = copy_resp.json()["barcode"]
+
+        response = await client.get("/api/v1/loans", params={"copy_barcode": barcode})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["loan_id"] == loan_id
+
     async def test_get_loan_endpoint(self, client: AsyncClient, db: AsyncSession) -> None:
         ids = await self._setup_loan_prerequisites(client, db)
         issue_resp = await client.post(
@@ -767,6 +1008,36 @@ class TestLoansAPI:
         assert len(matching) == 1
         assert matching[0]["days_overdue"] == 3
         assert Decimal(matching[0]["estimated_fine"]) == Decimal("15.00")
+
+    async def test_overdue_loans_endpoint_filters_by_member_and_book(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        issue_resp = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+        loan_id = issue_resp.json()["loan_id"]
+
+        loan = await db.get(Loan, loan_id)
+        assert loan is not None
+        loan.borrowed_at = datetime.now(UTC) - timedelta(days=20)
+        loan.due_at = datetime.now(UTC) - timedelta(days=1)
+        db.add(loan)
+        await db.flush()
+
+        matching = await client.get(
+            "/api/v1/loans/overdue", params={"member_name": "Member", "book_title": "API Test"}
+        )
+        assert matching.status_code == 200
+        assert loan_id in [entry["loan_id"] for entry in matching.json()["items"]]
+
+        no_match = await client.get(
+            "/api/v1/loans/overdue", params={"member_name": "Nonexistent Name XYZ"}
+        )
+        assert no_match.status_code == 200
+        assert loan_id not in [entry["loan_id"] for entry in no_match.json()["items"]]
 
     async def test_overdue_loans_endpoint_excludes_not_yet_due(
         self, client: AsyncClient, db: AsyncSession

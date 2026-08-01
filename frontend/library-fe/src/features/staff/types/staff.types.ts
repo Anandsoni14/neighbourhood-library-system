@@ -46,6 +46,9 @@ export interface ListStaffParams {
   skip: number;
   limit: number;
   name?: string;
+  employeeCode?: string;
+  email?: string;
+  phoneNumber?: string;
   role?: StaffRole;
   status?: StaffStatus;
   sortBy: StaffSortField;

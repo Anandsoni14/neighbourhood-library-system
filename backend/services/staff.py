@@ -77,6 +77,9 @@ class StaffService:
         role: StaffRole | None = None,
         status: StaffStatus | None = None,
         name: str | None = None,
+        employee_code: str | None = None,
+        email: str | None = None,
+        phone_number: str | None = None,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
@@ -91,6 +94,12 @@ class StaffService:
         if name:
             pattern = f"%{name}%"
             filters.append(Staff.first_name.ilike(pattern) | Staff.last_name.ilike(pattern))
+        if employee_code:
+            filters.append(Staff.employee_code.ilike(f"%{employee_code}%"))
+        if email:
+            filters.append(Staff.email.ilike(f"%{email}%"))
+        if phone_number:
+            filters.append(Staff.phone_number.ilike(f"%{phone_number}%"))
 
         staff, total = await self.repository.list_paginated(
             filters=filters,
@@ -146,15 +155,10 @@ class StaffService:
     async def deactivate_staff(self, staff_id: UUID, *, acting_staff_id: UUID) -> Staff:
         """Set a staff member's status to INACTIVE (soft-disable, not deletion).
 
-        Two guards that a generic `update_staff(status=...)` call cannot express
-        because it doesn't know the caller's intent is specifically "deactivate":
-
-        - An ADMIN cannot deactivate themselves: `api/deps.get_current_staff`
-          re-checks status == ACTIVE on every request, so this would invalidate
-          the caller's own token mid-request.
-        - The last remaining ACTIVE ADMIN cannot be deactivated: doing so would
-          lock every ADMIN-only endpoint — including this one — with no recovery
-          short of a direct database edit.
+        Guards a generic update_staff(status=...) can't express: an ADMIN can't
+        deactivate themselves (would invalidate their own token mid-request),
+        and the last active ADMIN can't be deactivated (would lock every
+        ADMIN-only endpoint with no recovery).
         """
         if staff_id == acting_staff_id:
             raise ConflictError("You cannot deactivate your own account")

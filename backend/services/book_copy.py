@@ -84,11 +84,7 @@ class BookCopyService:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[BookCopy], int]:
-        """List copies matching every supplied filter, returning the page and total.
-
-        Filters combine, so "available copies of this book" — the query the
-        borrow workflow actually needs — is a single request.
-        """
+        """List copies matching every supplied filter, returning the page and total."""
         filters: list[ColumnElement[bool]] = []
         if book_id is not None:
             filters.append(BookCopy.book_id == book_id)

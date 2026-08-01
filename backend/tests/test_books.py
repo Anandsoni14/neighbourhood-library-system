@@ -8,6 +8,7 @@ from core.exceptions import ConflictError, NotFoundError
 from core.pagination import SortDir
 from models import Book, Category
 from services.book import BookService
+from services.book_copy import BookCopyService
 from services.category import CategoryService
 
 
@@ -20,6 +21,11 @@ async def book_service(db: AsyncSession) -> BookService:
 @pytest.fixture
 async def category_service(db: AsyncSession) -> CategoryService:
     return CategoryService(db)
+
+
+@pytest.fixture
+async def copy_service(db: AsyncSession) -> BookCopyService:
+    return BookCopyService(db)
 
 
 class TestBookService:
@@ -160,6 +166,41 @@ class TestBookService:
         assert len(results) == 1
         assert total == 1
         assert results[0].isbn == "ISBN-001"
+
+    async def test_list_books_isbn_substring_match(self, book_service: BookService) -> None:
+        """ISBN filtering is a substring match, like title/author, not exact."""
+        await book_service.create_book(
+            title="Substring ISBN Book", author="Author", isbn="978-0-13-235088-4"
+        )
+
+        results, total = await book_service.list_books(isbn="235088")
+
+        assert total == 1
+        assert results[0].title == "Substring ISBN Book"
+
+    async def test_list_books_in_stock_true_returns_only_books_with_available_copy(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        in_stock_book = await book_service.create_book(title="In Stock Book", author="Author")
+        await copy_service.create_copy(book_id=in_stock_book.book_id, barcode=f"BC-{uuid4()}")
+        await book_service.create_book(title="Out Of Stock Book", author="Author")
+
+        results, total = await book_service.list_books(title="Book", in_stock=True)
+
+        assert total == 1
+        assert results[0].title == "In Stock Book"
+
+    async def test_list_books_in_stock_false_returns_only_books_without_available_copy(
+        self, book_service: BookService, copy_service: BookCopyService
+    ) -> None:
+        in_stock_book = await book_service.create_book(title="Stocked Book", author="Author")
+        await copy_service.create_copy(book_id=in_stock_book.book_id, barcode=f"BC-{uuid4()}")
+        await book_service.create_book(title="Unstocked Book", author="Author")
+
+        results, total = await book_service.list_books(title="Book", in_stock=False)
+
+        assert total == 1
+        assert results[0].title == "Unstocked Book"
 
     async def test_filters_combine(
         self, book_service: BookService, category_service: CategoryService
@@ -336,6 +377,36 @@ class TestBooksAPI:
         data = response.json()
         assert data["total"] == 1
         assert data["items"][0]["title"] == "Combined Alpha"
+
+    async def test_list_books_endpoint_filters_by_in_stock(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        stocked_resp = await client.post(
+            "/api/v1/books",
+            json={"title": "Endpoint Stocked Book", "author": "Author"},
+            headers=librarian_headers,
+        )
+        stocked_book_id = stocked_resp.json()["book_id"]
+        await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": stocked_book_id, "barcode": f"BC-{uuid4()}"},
+            headers=librarian_headers,
+        )
+        await client.post(
+            "/api/v1/books",
+            json={"title": "Endpoint Unstocked Book", "author": "Author"},
+            headers=librarian_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/books",
+            params={"title": "Endpoint", "in_stock": "true"},
+            headers=librarian_headers,
+        )
+
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["title"] == "Endpoint Stocked Book"
 
     async def test_list_books_endpoint_filters_by_category_id(
         self, client: AsyncClient, librarian_headers: dict[str, str]

@@ -14,23 +14,48 @@ if (!seededLoan) {
   throw new Error('Expected at least one seeded loan fixture');
 }
 
+function findRow(text: string) {
+  return screen.findByText(text).then((cell) => {
+    const row = cell.closest('[role="row"]');
+    if (!row) {
+      throw new Error(`Expected a DataGrid row containing "${text}"`);
+    }
+    return row as HTMLElement;
+  });
+}
+
 describe('LoansPage', () => {
   it('lists loans from the API with resolved member and book labels', async () => {
     render(<LoansPage />);
 
     expect(await screen.findByText('Ada Lovelace')).toBeVisible();
-    expect(screen.getByText(/The Pragmatic Programmer \(BC-002\)/)).toBeVisible();
+    expect(screen.getByText('The Pragmatic Programmer')).toBeVisible();
+    expect(screen.getByText('BC-002')).toBeVisible();
     expect(screen.getByText('ACTIVE')).toBeVisible();
   });
 
   it('shows an empty state when a filter matches nothing', async () => {
-    const user = userEvent.setup();
-    render(<LoansPage />);
-    await screen.findByText('Ada Lovelace');
+    render(<LoansPage />, { initialEntries: ['/loans?member=no+such+member'] });
 
-    await user.type(screen.getByLabelText('Member ID'), 'no-such-member');
+    expect(await screen.findByText(/no rows/i)).toBeVisible();
+  });
 
-    expect(await screen.findByText('No loans found.')).toBeVisible();
+  it('filters by member name, reflecting the filter in the URL', async () => {
+    render(<LoansPage />, { initialEntries: ['/loans?member=Ada'] });
+
+    expect(await screen.findByText('Ada Lovelace')).toBeVisible();
+  });
+
+  it('filters by book title', async () => {
+    render(<LoansPage />, { initialEntries: ['/loans?book=Pragmatic'] });
+
+    expect(await screen.findByText('The Pragmatic Programmer')).toBeVisible();
+  });
+
+  it('filters by copy barcode', async () => {
+    render(<LoansPage />, { initialEntries: ['/loans?barcode=BC-002'] });
+
+    expect(await screen.findByText('BC-002')).toBeVisible();
   });
 
   it('issues a new loan through the dialog', async () => {
@@ -63,9 +88,9 @@ describe('LoansPage', () => {
   it('returns an active loan and shows the resulting fine', async () => {
     const user = userEvent.setup();
     render(<LoansPage />);
-    await screen.findByText('Ada Lovelace');
+    const row = await findRow('Ada Lovelace');
 
-    await user.click(screen.getByRole('button', { name: `Return loan ${seededLoan.loan_id}` }));
+    await user.click(within(row).getByRole('menuitem', { name: 'Return' }));
     const dialog = screen.getByRole('dialog');
     await user.click(within(dialog).getByLabelText(/return condition/i));
     await user.click(screen.getByRole('option', { name: 'Good' }));

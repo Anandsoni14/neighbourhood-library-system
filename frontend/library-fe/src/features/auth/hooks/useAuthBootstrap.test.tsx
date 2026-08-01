@@ -6,13 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_TOKEN_STORAGE_KEY } from '@/redux/slices/authSlice';
 import { setupStore } from '@/redux/store';
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 
 import { useAuthBootstrap } from './useAuthBootstrap';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: { post: vi.fn(), get: vi.fn() },
-  attachAuthInterceptors: vi.fn(),
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: { post: vi.fn(), get: vi.fn() },
+    attachAuthInterceptors: vi.fn(),
+  };
+});
 
 function wrapperFor(store: ReturnType<typeof setupStore>) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -37,7 +42,7 @@ describe('useAuthBootstrap', () => {
       role: 'LIBRARIAN' as const,
       status: 'ACTIVE' as const,
     };
-    vi.mocked(httpClient.get).mockResolvedValue({ data: staff });
+    vi.mocked(httpClient.get).mockResolvedValue(staff);
     const store = setupStore({
       auth: { token: 'persisted-token', staff: null, status: 'loading', error: null },
     });

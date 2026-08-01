@@ -111,6 +111,10 @@ test.beforeEach(async ({ page }) => {
 
   await page.route('**/api/v1/book-copies**', async (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === '/api/v1/book-copies') {
+      await route.fulfill({ json: { items: [COPY], total: 1, skip: 0, limit: 50 } });
+      return;
+    }
     const copyId = url.pathname.split('/').pop();
     if (copyId === COPY.copy_id) {
       await route.fulfill({ json: COPY });
@@ -175,14 +179,23 @@ test.describe('dashboard', () => {
   });
 
   test('returns an overdue loan directly from the dashboard', async ({ page }) => {
-    await page.getByRole('button', { name: /return loan/i }).click();
+    await page.getByRole('menuitem', { name: 'Return' }).click();
 
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel(/return condition/i).click();
     await page.getByRole('option', { name: 'Good' }).click();
     await dialog.getByRole('button', { name: 'Return' }).click();
 
-    await expect(page.getByText('No overdue loans.')).toBeVisible();
+    await expect(page.getByText(/no rows/i)).toBeVisible();
     await expect(page.getByText(/Loan returned\. Fine: \$75\.00/)).toBeVisible();
+  });
+
+  test('opens member and book details from the overdue loans widget', async ({ page }) => {
+    await page.getByText('Grace Hopper').click();
+    await expect(page.getByRole('heading', { name: /borrow history/i })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.getByText(/Clean Code/).click();
+    await expect(page.getByRole('heading', { name: /copies.*clean code/i })).toBeVisible();
   });
 });

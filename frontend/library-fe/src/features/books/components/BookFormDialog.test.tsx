@@ -5,7 +5,9 @@ import { render, screen } from '@/tests/test-utils';
 
 import { BookFormDialog } from './BookFormDialog';
 
-const categories = [{ category_id: 'cat-1', name: 'Software', description: null, is_archived: false }];
+const categories = [
+  { category_id: 'cat-1', name: 'Software', description: null, is_archived: false },
+];
 
 const book = {
   book_id: '1',

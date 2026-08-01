@@ -6,15 +6,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { setupStore } from '@/redux/store';
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { CopyCondition, LoanStatus } from '@/types/api';
 
 import { useLoans } from './useLoans';
 import { LoanSortField } from '../types/loan.types';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
-  attachAuthInterceptors: vi.fn(),
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
+    attachAuthInterceptors: vi.fn(),
+  };
+});
 
 const loan = {
   loan_id: '1',
@@ -46,7 +51,7 @@ describe('useLoans', () => {
   });
 
   it('fetches loans and exposes the resulting list and total', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ data: { items: [loan], total: 1 } });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [loan], total: 1 });
 
     const store = setupStore();
     const { result } = renderHook(() => useLoans(), { wrapper: wrapperFor(store) });
@@ -64,8 +69,29 @@ describe('useLoans', () => {
     expect(result.current.total).toBe(1);
   });
 
+  it('fetches overdue loans independently of the main loans list', async () => {
+    const overdueLoan = { ...loan, days_overdue: 3, estimated_fine: 15 };
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [overdueLoan], total: 1 });
+
+    const store = setupStore();
+    const { result } = renderHook(() => useLoans(), { wrapper: wrapperFor(store) });
+
+    await result.current.fetchOverdueLoans({
+      skip: 0,
+      limit: 25,
+      sortBy: LoanSortField.DUE_AT,
+      sortDir: 'asc',
+    });
+
+    await waitFor(() => {
+      expect(result.current.overdueItems).toEqual([overdueLoan]);
+    });
+    expect(result.current.overdueTotal).toBe(1);
+    expect(result.current.loans).toEqual([]);
+  });
+
   it('issues a loan and reports the mutation as no longer in flight', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: loan });
+    vi.mocked(httpClient.post).mockResolvedValue(loan);
 
     const store = setupStore();
     const { result } = renderHook(() => useLoans(), { wrapper: wrapperFor(store) });

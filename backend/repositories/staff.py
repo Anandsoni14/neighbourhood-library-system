@@ -25,12 +25,7 @@ class StaffRepository(BaseRepository[Staff]):
         return result.scalar_one_or_none()
 
     async def count_active_admins(self) -> int:
-        """Count ACTIVE staff with the ADMIN role.
-
-        Used to refuse deactivating the last one — without this, deactivating
-        the sole remaining admin would lock every ADMIN-only endpoint (staff
-        management itself included) with no recovery short of a SQL console.
-        """
+        """Count ACTIVE staff with the ADMIN role — used to refuse deactivating the last one."""
         result = await self._session.execute(
             select(func.count())
             .select_from(Staff)

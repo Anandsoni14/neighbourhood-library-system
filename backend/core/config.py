@@ -14,11 +14,7 @@ class Settings(BaseSettings):
     app_name: str = "Library Management System"
     environment: str = "local"
     database_url: str = "postgresql+psycopg://user:password@localhost:5432/library_db"
-    # A separate database for pytest, never seeded, so exact-count assertions in
-    # the test suite stay meaningful once sample data lands in `database_url`'s
-    # database via the Docker entrypoint. Never read by application runtime code
-    # (only tests/conftest.py uses it) — kept in Settings anyway for the same
-    # env/.env sourcing every other connection string gets.
+    # Separate, never-seeded DB for pytest; only tests/conftest.py reads this.
     test_database_url: str = "postgresql+psycopg://user:password@localhost:5432/library_test_db"
     log_level: str = "INFO"
     api_prefix: str = "/api/v1"
@@ -33,14 +29,7 @@ class Settings(BaseSettings):
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
     def _split_comma_separated(cls, value: object) -> object:
-        """Accept `a,b` from the environment as well as a JSON list.
-
-        NoDecode suppresses pydantic-settings' default JSON decoding of complex
-        types, which would otherwise reject the comma-separated form that reads
-        naturally in a .env file. JSON is still honoured so an existing
-        deployment passing `["https://app.example.com"]` keeps working rather
-        than silently ending up with one bracket-wrapped origin.
-        """
+        """Accept `a,b` from the environment as well as a JSON list."""
         if not isinstance(value, str):
             return value
         text = value.strip()

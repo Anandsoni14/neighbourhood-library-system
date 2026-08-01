@@ -3,12 +3,11 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Loader } from '@/components/Loader';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 
-/**
- * Gates every route nested under it behind authentication. A persisted
- * token's validity is confirmed asynchronously (see useAuthBootstrap), so
- * this shows a spinner rather than redirecting while that check is in
- * flight — otherwise a page reload would flash the login page every time.
- */
+import { ROUTES } from './paths';
+
+/** Gates nested routes behind authentication. Shows a spinner while a
+ * persisted token's validity is being confirmed (see useAuthBootstrap)
+ * instead of flashing the login page on every reload. */
 export function ProtectedRoute() {
   const { isAuthenticated, isCheckingSession } = useAuth();
   const location = useLocation();
@@ -18,7 +17,7 @@ export function ProtectedRoute() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to={ROUTES.login} state={{ from: location }} replace />;
   }
 
   return <Outlet />;

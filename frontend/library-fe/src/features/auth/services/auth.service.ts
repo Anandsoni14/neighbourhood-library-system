@@ -1,15 +1,14 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 
 import type { LoginRequest, LoginResponse, StaffResponse } from '../types/auth.types';
 
 export const authService = {
-  async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const { data } = await httpClient.post<LoginResponse>('/auth/login', credentials);
-    return data;
+  login(credentials: LoginRequest): Promise<LoginResponse> {
+    return httpClient.post<LoginResponse>(ENDPOINTS.auth.login, credentials);
   },
 
-  async getCurrentStaff(): Promise<StaffResponse> {
-    const { data } = await httpClient.get<StaffResponse>('/auth/me');
-    return data;
+  getCurrentStaff(): Promise<StaffResponse> {
+    return httpClient.get<StaffResponse>(ENDPOINTS.auth.me);
   },
 };

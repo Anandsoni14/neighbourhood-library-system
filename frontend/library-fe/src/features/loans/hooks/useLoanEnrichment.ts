@@ -15,14 +15,10 @@ interface LoanEnrichment {
   books: Record<string, Book>;
 }
 
-/**
- * `LoanResponse` only carries raw `member_id`/`copy_id` UUIDs — the backend
- * doesn't join member/book data into the loan list. This batch-resolves the
- * unique IDs on the current page via single-record lookups and holds them in
- * local state (not Redux — this is page-scoped derived data, not shared app
- * state). Individual lookup failures are swallowed so one bad ID doesn't blank
- * out the rest of the table.
- */
+/** LoanResponse only carries raw member_id/copy_id UUIDs, so this batch-resolves
+ * the unique IDs on the current page via single-record lookups into local
+ * (page-scoped, not Redux) state. Lookup failures are swallowed per-ID so one
+ * bad ID doesn't blank out the rest of the table. */
 export function useLoanEnrichment(loans: Loan[]): LoanEnrichment {
   const [members, setMembers] = useState<Record<string, Member>>({});
   const [copies, setCopies] = useState<Record<string, BookCopy>>({});

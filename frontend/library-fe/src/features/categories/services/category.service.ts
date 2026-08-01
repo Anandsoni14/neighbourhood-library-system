@@ -1,4 +1,5 @@
 import { httpClient } from '@/services/httpClient';
+import { ENDPOINTS } from '@/services/endpoints';
 import type { Page } from '@/types/api';
 
 import type { Category, CategoryRequest, ListCategoriesParams } from '../types/category.types';
@@ -12,37 +13,32 @@ function nonEmpty(value: string | undefined): string | undefined {
 }
 
 export const categoryService = {
-  async list(params: ListCategoriesParams): Promise<Page<Category>> {
-    const { data } = await httpClient.get<Page<Category>>('/categories', {
+  list(params: ListCategoriesParams): Promise<Page<Category>> {
+    return httpClient.get<Page<Category>>(ENDPOINTS.categories.list, {
       params: {
         skip: params.skip,
         limit: params.limit,
         name: nonEmpty(params.name),
-        include_archived: params.includeArchived,
+        archived: params.archived,
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },
     });
-    return data;
   },
 
-  async create(payload: CategoryRequest): Promise<Category> {
-    const { data } = await httpClient.post<Category>('/categories', payload);
-    return data;
+  create(payload: CategoryRequest): Promise<Category> {
+    return httpClient.post<Category>(ENDPOINTS.categories.list, payload);
   },
 
-  async update(categoryId: string, payload: CategoryRequest): Promise<Category> {
-    const { data } = await httpClient.put<Category>(`/categories/${categoryId}`, payload);
-    return data;
+  update(categoryId: string, payload: CategoryRequest): Promise<Category> {
+    return httpClient.put<Category>(ENDPOINTS.categories.byId(categoryId), payload);
   },
 
-  async archive(categoryId: string): Promise<Category> {
-    const { data } = await httpClient.post<Category>(`/categories/${categoryId}/archive`);
-    return data;
+  archive(categoryId: string): Promise<Category> {
+    return httpClient.post<Category>(ENDPOINTS.categories.archive(categoryId));
   },
 
-  async unarchive(categoryId: string): Promise<Category> {
-    const { data } = await httpClient.post<Category>(`/categories/${categoryId}/unarchive`);
-    return data;
+  unarchive(categoryId: string): Promise<Category> {
+    return httpClient.post<Category>(ENDPOINTS.categories.unarchive(categoryId));
   },
 };

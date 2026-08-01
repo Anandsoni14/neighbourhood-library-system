@@ -1,20 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { httpClient } from '@/services/httpClient';
+import type * as httpClientModule from '@/services/httpClient';
 import { MembershipStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
 
 import { memberService } from './member.service';
 import { MemberSortField } from '../types/member.types';
 
-vi.mock('@/services/httpClient', () => ({
-  httpClient: {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+vi.mock('@/services/httpClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof httpClientModule>();
+  return {
+    ...actual,
+    httpClient: {
+      get: vi.fn(),
+      post: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+    },
+  };
+});
 
 const member = {
   member_id: '1',
@@ -35,9 +40,7 @@ const member = {
 
 describe('memberService', () => {
   it('lists members, omitting blank filters and forwarding sort/pagination', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({
-      data: { items: [member], total: 1, skip: 0, limit: 25 },
-    });
+    vi.mocked(httpClient.get).mockResolvedValue({ items: [member], total: 1, skip: 0, limit: 25 });
 
     const result = await memberService.list({
       skip: 0,
@@ -63,7 +66,7 @@ describe('memberService', () => {
   });
 
   it('fetches a single member by id', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ data: member });
+    vi.mocked(httpClient.get).mockResolvedValue(member);
 
     const result = await memberService.get('1');
 
@@ -72,7 +75,7 @@ describe('memberService', () => {
   });
 
   it('creates a member', async () => {
-    vi.mocked(httpClient.post).mockResolvedValue({ data: member });
+    vi.mocked(httpClient.post).mockResolvedValue(member);
 
     const payload = { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' };
     const result = await memberService.create(payload);
@@ -82,7 +85,7 @@ describe('memberService', () => {
   });
 
   it('updates a member', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue({ data: member });
+    vi.mocked(httpClient.put).mockResolvedValue(member);
 
     const payload = { first_name: 'Ada', last_name: 'Lovelace', email: 'ada@example.com' };
     const result = await memberService.update('1', payload);
@@ -92,7 +95,7 @@ describe('memberService', () => {
   });
 
   it('deletes a member', async () => {
-    vi.mocked(httpClient.delete).mockResolvedValue({ data: undefined });
+    vi.mocked(httpClient.delete).mockResolvedValue(undefined);
 
     await memberService.remove('1');
 

@@ -9,6 +9,7 @@ import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
+import { ROUTES } from '@/routes/paths';
 
 export function Header() {
   const { staff, logout } = useAuth();
@@ -16,7 +17,7 @@ export function Header() {
 
   const handleLogout = () => {
     logout();
-    void navigate('/login', { replace: true });
+    void navigate(ROUTES.login, { replace: true });
   };
 
   return (

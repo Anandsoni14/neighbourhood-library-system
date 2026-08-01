@@ -107,7 +107,7 @@ test.describe('members directory', () => {
 
     await expect(page).toHaveURL(/\/members$/);
     await expect(page.getByRole('heading', { name: 'Members' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'Katherine', exact: true })).toBeVisible();
+    await expect(page.getByText('Katherine Johnson')).toBeVisible();
   });
 
   test('adds a new member', async ({ page }) => {
@@ -134,7 +134,7 @@ test.describe('members directory', () => {
       .click();
     await expect(page).toHaveURL(/\/members$/);
 
-    await page.getByRole('button', { name: /edit katherine johnson/i }).click();
+    await page.getByRole('menuitem', { name: 'Edit' }).click();
     const dialog = page.getByRole('dialog');
     const emailField = dialog.getByLabel(/^email/i);
     await emailField.fill('katherine.johnson@example.com');
@@ -150,9 +150,9 @@ test.describe('members directory', () => {
       .click();
     await expect(page).toHaveURL(/\/members$/);
 
-    await page.getByRole('button', { name: /delete katherine johnson/i }).click();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
     await page.getByRole('button', { name: 'Delete' }).click();
 
-    await expect(page.getByText('No members found.')).toBeVisible();
+    await expect(page.getByText(/no rows/i)).toBeVisible();
   });
 });

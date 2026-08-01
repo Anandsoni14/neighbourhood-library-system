@@ -71,7 +71,7 @@ same-origin with its API, so it doesn't depend on CORS in production.
 ## Available scripts
 
 | Command                 | Purpose                                              |
-| ----------------------- | ----------------------------------------------------- |
+| ----------------------- | ---------------------------------------------------- |
 | `npm run dev`           | Start the Vite dev server                            |
 | `npm run build`         | Type-check (`tsc -b`) then build for production      |
 | `npm run preview`       | Serve the production build locally                   |
@@ -158,11 +158,11 @@ throwables.
 
 ## Reusable components
 
-| Component | Props | Purpose |
-|---|---|---|
-| `ConfirmDialog` | `open, title, description, confirmLabel? (default 'Delete'), isConfirming, onCancel, onConfirm` | Shared destructive-action confirmation dialog, used for delete/archive flows |
-| `FeedbackSnackbar` | `open, message: string \| null, severity: 'error' \| 'success', onClose` | Standardized toast for success/error feedback after mutations |
-| `Loader` | `label? (default 'Loading')` | Full-viewport centered spinner, used as the route Suspense fallback and session-check indicator |
+| Component          | Props                                                                                           | Purpose                                                                                         |
+| ------------------ | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `ConfirmDialog`    | `open, title, description, confirmLabel? (default 'Delete'), isConfirming, onCancel, onConfirm` | Shared destructive-action confirmation dialog, used for delete/archive flows                    |
+| `FeedbackSnackbar` | `open, message: string \| null, severity: 'error' \| 'success', onClose`                        | Standardized toast for success/error feedback after mutations                                   |
+| `Loader`           | `label? (default 'Loading')`                                                                    | Full-viewport centered spinner, used as the route Suspense fallback and session-check indicator |
 
 `src/app/ErrorBoundary.tsx` (a class component, since error boundaries have no hook
 equivalent) wraps the whole app and renders a fallback screen with a reload button on an
@@ -211,9 +211,12 @@ formatting is Prettier (`singleQuote`, `trailingComma: all`, `printWidth: 100`).
   Theme). Vitest config lives inline in `vite.config.ts` (`environment: 'jsdom'`, coverage via
   `@vitest/coverage-v8`).
 - **E2E tests** (`npm run e2e`) run against a production build served by `vite
-  preview`, with the backend API mocked via Playwright's `page.route`. They don't
+preview`, with the backend API mocked via Playwright's `page.route`. They don't
   require the real backend or Docker to be running. Specs cover the login flow, books CRUD,
   members CRUD, issuing/returning loans, and the dashboard.
+  Requires `.env` to exist (see [Getting started](#getting-started)) — `VITE_API_BASE_URL` is
+  baked into the bundle at build time, so without it API calls resolve to the wrong path and
+  every spec fails at login.
 
 ## Environment variables
 

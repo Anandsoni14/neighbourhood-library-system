@@ -5,6 +5,7 @@ import type { Category } from '@/features/categories/types/category.types';
 import type { BookCopy } from '@/features/copies/types/copy.types';
 import type { Loan } from '@/features/loans/types/loan.types';
 import type { Member } from '@/features/members/types/member.types';
+import type { Staff } from '@/features/staff/types/staff.types';
 
 // Matches the jsdom `url` pinned in vite.config.ts's test.environmentOptions.
 // Requests axios sends with a relative baseURL (e.g. `/api/v1/...`) resolve
@@ -23,12 +24,41 @@ export const staffFixture = {
   status: 'ACTIVE' as const,
 };
 
+export const staffFixtures: Staff[] = [
+  {
+    staff_id: '88888888-8888-8888-8888-888888888881',
+    employee_code: 'EMP-002',
+    first_name: 'Priya',
+    last_name: 'Singh',
+    email: 'priya.singh@example.com',
+    phone_number: '9990000001',
+    role: 'ADMIN',
+    status: 'ACTIVE',
+  },
+  {
+    staff_id: '88888888-8888-8888-8888-888888888882',
+    employee_code: 'EMP-003',
+    first_name: 'James',
+    last_name: 'Chen',
+    email: 'james.chen@example.com',
+    phone_number: null,
+    role: 'LIBRARIAN',
+    status: 'INACTIVE',
+  },
+];
+
 export const categoryFixtures: Category[] = [
   {
     category_id: '66666666-6666-6666-6666-666666666661',
     name: 'Software',
-    description: null,
+    description: 'Programming and software engineering.',
     is_archived: false,
+  },
+  {
+    category_id: '66666666-6666-6666-6666-666666666662',
+    name: 'History',
+    description: null,
+    is_archived: true,
   },
 ];
 
@@ -182,6 +212,13 @@ export function resetLoans(): void {
   loans = loanFixtures.map((loan) => ({ ...loan }));
 }
 
+/** Same rationale as `resetBooks`, for the staff fixture store. */
+let staffList = staffFixtures.map((member) => ({ ...member }));
+
+export function resetStaff(): void {
+  staffList = staffFixtures.map((member) => ({ ...member }));
+}
+
 function matches(value: string | null, query: string | null, exact = false): boolean {
   if (!query) {
     return true;
@@ -208,10 +245,12 @@ export const handlers = [
     const skip = Number(url.searchParams.get('skip') ?? '0');
     const limit = Number(url.searchParams.get('limit') ?? '100');
     const name = url.searchParams.get('name');
-    const includeArchived = url.searchParams.get('include_archived') === 'true';
+    const archived = url.searchParams.get('archived') ?? 'active';
 
     const filtered = categories.filter(
-      (category) => matches(category.name, name) && (includeArchived || !category.is_archived),
+      (category) =>
+        matches(category.name, name) &&
+        (archived === 'all' ? true : archived === 'archived' ? category.is_archived : !category.is_archived),
     );
     const page = filtered.slice(skip, skip + limit);
 
@@ -273,16 +312,25 @@ export const handlers = [
     const categoryId = url.searchParams.get('category_id');
     const isbn = url.searchParams.get('isbn');
     const archived = url.searchParams.get('archived') ?? 'active';
+    const inStockParam = url.searchParams.get('in_stock');
     const sortBy = (url.searchParams.get('sort_by') ?? 'title') as keyof (typeof books)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
+
+    const hasAvailableCopy = (bookId: string) =>
+      copies.some((copy) => copy.book_id === bookId && copy.status === 'AVAILABLE');
 
     const filtered = books.filter(
       (book) =>
         matches(book.title, title) &&
         matches(book.author, author) &&
         (categoryId ? book.category_id === categoryId : true) &&
-        matches(book.isbn, isbn, true) &&
-        (archived === 'all' ? true : archived === 'archived' ? book.is_archived : !book.is_archived),
+        matches(book.isbn, isbn) &&
+        (archived === 'all'
+          ? true
+          : archived === 'archived'
+            ? book.is_archived
+            : !book.is_archived) &&
+        (inStockParam === null ? true : hasAvailableCopy(book.book_id) === (inStockParam === 'true')),
     );
 
     const sorted = [...filtered].sort((a, b) => {
@@ -394,6 +442,7 @@ export const handlers = [
     const limit = Number(url.searchParams.get('limit') ?? '100');
     const name = url.searchParams.get('name');
     const email = url.searchParams.get('email');
+    const phoneNumber = url.searchParams.get('phone_number');
     const status = url.searchParams.get('status');
     const sortBy = (url.searchParams.get('sort_by') ??
       'last_name') as keyof (typeof members)[number];
@@ -403,6 +452,7 @@ export const handlers = [
       (member) =>
         (matches(member.first_name, name) || matches(member.last_name, name)) &&
         matches(member.email, email) &&
+        matches(member.phone_number, phoneNumber) &&
         (status ? member.membership_status === status : true),
     );
 
@@ -549,16 +599,30 @@ export const handlers = [
     const memberId = url.searchParams.get('member_id');
     const copyId = url.searchParams.get('copy_id');
     const status = url.searchParams.get('status');
+    const memberName = url.searchParams.get('member_name');
+    const bookTitle = url.searchParams.get('book_title');
+    const copyBarcode = url.searchParams.get('copy_barcode');
     const sortBy = (url.searchParams.get('sort_by') ??
       'borrowed_at') as keyof (typeof loans)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'desc';
 
-    const filtered = loans.filter(
-      (loan) =>
+    const filtered = loans.filter((loan) => {
+      const copy = copies.find((candidate) => candidate.copy_id === loan.copy_id);
+      const book = copy ? books.find((candidate) => candidate.book_id === copy.book_id) : undefined;
+      const member = members.find((candidate) => candidate.member_id === loan.member_id);
+
+      return (
         (memberId ? loan.member_id === memberId : true) &&
         (copyId ? loan.copy_id === copyId : true) &&
-        (status ? loan.status === status : true),
-    );
+        (status ? loan.status === status : true) &&
+        (memberName
+          ? matches(member?.first_name ?? null, memberName) ||
+            matches(member?.last_name ?? null, memberName)
+          : true) &&
+        matches(book?.title ?? null, bookTitle) &&
+        matches(copy?.barcode ?? null, copyBarcode)
+      );
+    });
 
     const sorted = [...filtered].sort((a, b) => {
       const left = a[sortBy];
@@ -583,10 +647,25 @@ export const handlers = [
     const limit = Number(url.searchParams.get('limit') ?? '100');
     const sortBy = (url.searchParams.get('sort_by') ?? 'due_at') as keyof (typeof loans)[number];
     const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
+    const memberName = url.searchParams.get('member_name');
+    const bookTitle = url.searchParams.get('book_title');
     const now = new Date();
 
     const overdue = loans
-      .filter((loan) => loan.status === 'ACTIVE' && new Date(loan.due_at) < now)
+      .filter((loan) => {
+        if (loan.status !== 'ACTIVE' || !(new Date(loan.due_at) < now)) {
+          return false;
+        }
+        const copy = copies.find((candidate) => candidate.copy_id === loan.copy_id);
+        const book = copy ? books.find((candidate) => candidate.book_id === copy.book_id) : undefined;
+        const member = members.find((candidate) => candidate.member_id === loan.member_id);
+        return (
+          (memberName
+            ? matches(member?.first_name ?? null, memberName) ||
+              matches(member?.last_name ?? null, memberName)
+            : true) && matches(book?.title ?? null, bookTitle)
+        );
+      })
       .map((loan) => {
         const copy = copies.find((candidate) => candidate.copy_id === loan.copy_id);
         const daysOverdue = Math.ceil(
@@ -693,6 +772,98 @@ export const handlers = [
       copies = [...copies.slice(0, copyIndex), returned, ...copies.slice(copyIndex + 1)];
     }
 
+    return HttpResponse.json(updated);
+  }),
+
+  http.get(`${API_ORIGIN}/staff`, ({ request }) => {
+    const url = new URL(request.url);
+    const skip = Number(url.searchParams.get('skip') ?? '0');
+    const limit = Number(url.searchParams.get('limit') ?? '100');
+    const name = url.searchParams.get('name');
+    const employeeCode = url.searchParams.get('employee_code');
+    const email = url.searchParams.get('email');
+    const phoneNumber = url.searchParams.get('phone_number');
+    const role = url.searchParams.get('role');
+    const status = url.searchParams.get('status');
+    const sortBy = (url.searchParams.get('sort_by') ??
+      'employee_code') as keyof (typeof staffList)[number];
+    const sortDir = url.searchParams.get('sort_dir') ?? 'asc';
+
+    const filtered = staffList.filter(
+      (member) =>
+        (matches(member.first_name, name) || matches(member.last_name, name)) &&
+        matches(member.employee_code, employeeCode) &&
+        matches(member.email, email) &&
+        matches(member.phone_number, phoneNumber) &&
+        (role ? member.role === role : true) &&
+        (status ? member.status === status : true),
+    );
+
+    const sorted = [...filtered].sort((a, b) => {
+      const left = a[sortBy];
+      const right = b[sortBy];
+      if (left === right) {
+        return 0;
+      }
+      const direction = left != null && right != null && left > right ? 1 : -1;
+      return sortDir === 'desc' ? -direction : direction;
+    });
+
+    const page = sorted.slice(skip, skip + limit);
+
+    return HttpResponse.json({ items: page, total: filtered.length, skip, limit });
+  }),
+
+  http.post(`${API_ORIGIN}/staff`, async ({ request }) => {
+    const body = (await request.json()) as Omit<
+      (typeof staffList)[number],
+      'staff_id' | 'status'
+    > & { password: string };
+    const created: Staff = {
+      staff_id: `generated-${String(staffList.length + 1)}`,
+      employee_code: body.employee_code,
+      first_name: body.first_name,
+      last_name: body.last_name,
+      email: body.email,
+      phone_number: body.phone_number ?? null,
+      role: body.role ?? 'LIBRARIAN',
+      status: 'ACTIVE',
+    };
+    staffList = [...staffList, created];
+    return HttpResponse.json(created, { status: 201 });
+  }),
+
+  http.put(`${API_ORIGIN}/staff/:staffId`, async ({ request, params }) => {
+    const body = (await request.json()) as Partial<(typeof staffList)[number]>;
+    const index = staffList.findIndex((member) => member.staff_id === params.staffId);
+    const existing = staffList[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Staff not found' }, { status: 404 });
+    }
+    const updated = { ...existing, ...body };
+    staffList = [...staffList.slice(0, index), updated, ...staffList.slice(index + 1)];
+    return HttpResponse.json(updated);
+  }),
+
+  http.post(`${API_ORIGIN}/staff/:staffId/activate`, ({ params }) => {
+    const index = staffList.findIndex((member) => member.staff_id === params.staffId);
+    const existing = staffList[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Staff not found' }, { status: 404 });
+    }
+    const updated = { ...existing, status: 'ACTIVE' as const };
+    staffList = [...staffList.slice(0, index), updated, ...staffList.slice(index + 1)];
+    return HttpResponse.json(updated);
+  }),
+
+  http.post(`${API_ORIGIN}/staff/:staffId/deactivate`, ({ params }) => {
+    const index = staffList.findIndex((member) => member.staff_id === params.staffId);
+    const existing = staffList[index];
+    if (index === -1 || !existing) {
+      return HttpResponse.json({ detail: 'Staff not found' }, { status: 404 });
+    }
+    const updated = { ...existing, status: 'INACTIVE' as const };
+    staffList = [...staffList.slice(0, index), updated, ...staffList.slice(index + 1)];
     return HttpResponse.json(updated);
   }),
 ];

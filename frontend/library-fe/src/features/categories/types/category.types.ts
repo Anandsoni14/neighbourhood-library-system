@@ -19,11 +19,20 @@ export const CategorySortField = {
 } as const;
 export type CategorySortField = (typeof CategorySortField)[keyof typeof CategorySortField];
 
+/** Mirrors the backend's `CategoryArchiveFilter` in `api/categories.py`. */
+export const CategoryArchiveFilter = {
+  ACTIVE: 'active',
+  ARCHIVED: 'archived',
+  ALL: 'all',
+} as const;
+export type CategoryArchiveFilter =
+  (typeof CategoryArchiveFilter)[keyof typeof CategoryArchiveFilter];
+
 export interface ListCategoriesParams {
   skip: number;
   limit: number;
   name?: string;
-  includeArchived?: boolean;
+  archived?: CategoryArchiveFilter;
   sortBy: CategorySortField;
   sortDir: SortDir;
 }

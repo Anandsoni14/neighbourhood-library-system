@@ -1,9 +1,7 @@
 import type { Components, Theme } from '@mui/material/styles';
 
-// Centralizes the anti-Dribbble decisions in one place: no ripple, no
-// elevation-as-decoration, flat 1px borders instead of drop shadows, dense
-// table padding, and small buttons by default. Every feature inherits these
-// automatically instead of each component re-declaring them.
+// Shared defaults so every feature gets the same look (no ripple, flat 1px
+// borders instead of drop shadows, dense padding) without re-declaring it.
 export const components: Components<Theme> = {
   MuiButtonBase: {
     defaultProps: {

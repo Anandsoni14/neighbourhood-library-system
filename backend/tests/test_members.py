@@ -93,6 +93,22 @@ class TestMemberService:
         assert total == 1
         assert results[0].member_id == blocked.member_id
 
+    async def test_list_members_by_phone_number(self, member_service: MemberService) -> None:
+        member = await member_service.create_member(
+            first_name="Phone",
+            last_name="Filter",
+            email="phone.filter@example.com",
+            phone_number="+15551234567",
+        )
+        await member_service.create_member(
+            first_name="Other", last_name="Member", email="other.member@example.com"
+        )
+
+        results, total = await member_service.list_members(phone_number="5551234")
+
+        assert total == 1
+        assert results[0].member_id == member.member_id
+
     async def test_filtered_list_still_paginates(self, member_service: MemberService) -> None:
         """A filtered query honours limit/offset and reports the filtered total."""
         for index in range(4):
@@ -241,6 +257,37 @@ class TestMembersAPI:
         data = response.json()
         assert isinstance(data["items"], list)
         assert isinstance(data["total"], int)
+
+    async def test_list_members_endpoint_filters_by_phone_number(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Phone",
+                "last_name": "Endpoint",
+                "email": "phone.endpoint@example.com",
+                "phone_number": "9876543210",
+            },
+            headers=librarian_headers,
+        )
+        await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "Other",
+                "last_name": "Endpoint",
+                "email": "other.endpoint@example.com",
+            },
+            headers=librarian_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/members", params={"phone_number": "987654"}, headers=librarian_headers
+        )
+
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["email"] == "phone.endpoint@example.com"
 
     async def test_get_member_endpoint(
         self, client: AsyncClient, librarian_headers: dict[str, str]
