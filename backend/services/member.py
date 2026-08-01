@@ -87,6 +87,7 @@ class MemberService:
         status: MembershipStatus | None = None,
         name: str | None = None,
         email: str | None = None,
+        phone_number: str | None = None,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
@@ -105,6 +106,8 @@ class MemberService:
             filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
         if email:
             filters.append(Member.email.ilike(f"%{email}%"))
+        if phone_number:
+            filters.append(Member.phone_number.ilike(f"%{phone_number}%"))
 
         members, total = await self.repository.list_paginated(
             filters=filters,

@@ -115,10 +115,6 @@ in Redux Toolkit slices (one per feature), each feature following the same
 - Overdue-loans report
 - Pagination, filtering, and sorting on every list endpoint
 
-## Screenshots
-
-_No screenshots are currently included in this repository._
-
 ## Quick start
 
 Requires Docker and Docker Compose.

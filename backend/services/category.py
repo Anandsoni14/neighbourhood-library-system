@@ -46,7 +46,7 @@ class CategoryService:
         self,
         *,
         name: str | None = None,
-        include_archived: bool = False,
+        is_archived: bool | None = False,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
@@ -56,8 +56,8 @@ class CategoryService:
         filters: list[ColumnElement[bool]] = []
         if name:
             filters.append(Category.name.ilike(f"%{name}%"))
-        if not include_archived:
-            filters.append(Category.is_archived.is_(False))
+        if is_archived is not None:
+            filters.append(Category.is_archived.is_(is_archived))
 
         categories, total = await self.repository.list_paginated(
             filters=filters,

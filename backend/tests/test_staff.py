@@ -241,6 +241,90 @@ class TestStaffService:
         with pytest.raises(NotFoundError):
             await staff_service.get_staff(staff.staff_id)
 
+    async def test_list_staff_by_employee_code(self, staff_service: StaffService) -> None:
+        staff = await staff_service.create_staff(
+            employee_code="LIST-CODE-001",
+            first_name="Filter",
+            last_name="Code",
+            email="filter.code@library.com",
+            password="password123",
+        )
+        await staff_service.create_staff(
+            employee_code="OTHER-CODE-002",
+            first_name="Other",
+            last_name="Code",
+            email="other.code@library.com",
+            password="password123",
+        )
+
+        results, total = await staff_service.list_staff(employee_code="LIST-CODE")
+
+        assert total == 1
+        assert results[0].staff_id == staff.staff_id
+
+    async def test_list_staff_by_email(self, staff_service: StaffService) -> None:
+        staff = await staff_service.create_staff(
+            employee_code="LIST-EMAIL-001",
+            first_name="Filter",
+            last_name="Email",
+            email="unique.filter.email@library.com",
+            password="password123",
+        )
+
+        results, total = await staff_service.list_staff(email="unique.filter.email")
+
+        assert total == 1
+        assert results[0].staff_id == staff.staff_id
+
+    async def test_list_staff_by_phone_number(self, staff_service: StaffService) -> None:
+        staff = await staff_service.create_staff(
+            employee_code="LIST-PHONE-001",
+            first_name="Filter",
+            last_name="Phone",
+            email="filter.phone@library.com",
+            password="password123",
+            phone_number="+15559876543",
+        )
+        await staff_service.create_staff(
+            employee_code="LIST-PHONE-002",
+            first_name="Other",
+            last_name="Phone",
+            email="other.phone@library.com",
+            password="password123",
+        )
+
+        results, total = await staff_service.list_staff(phone_number="5559876")
+
+        assert total == 1
+        assert results[0].staff_id == staff.staff_id
+
+    async def test_list_staff_combines_role_and_employee_code(
+        self, staff_service: StaffService
+    ) -> None:
+        """Filters are ANDed: a role mismatch excludes an otherwise-matching code."""
+        admin = await staff_service.create_staff(
+            employee_code="COMBINED-ADMIN-001",
+            first_name="Combined",
+            last_name="Admin",
+            email="combined.admin@library.com",
+            password="password123",
+            role=StaffRole.ADMIN,
+        )
+        await staff_service.create_staff(
+            employee_code="COMBINED-LIB-002",
+            first_name="Combined",
+            last_name="Librarian",
+            email="combined.librarian@library.com",
+            password="password123",
+        )
+
+        results, total = await staff_service.list_staff(
+            employee_code="COMBINED", role=StaffRole.ADMIN
+        )
+
+        assert total == 1
+        assert results[0].staff_id == admin.staff_id
+
 
 class TestStaffAPI:
     """Test Staff API endpoints."""
@@ -318,6 +402,42 @@ class TestStaffAPI:
         data = response.json()
         assert isinstance(data["items"], list)
         assert isinstance(data["total"], int)
+
+    async def test_list_staff_endpoint_combines_employee_code_and_email(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "ENDPOINT-CODE-001",
+                "first_name": "Endpoint",
+                "last_name": "Filter",
+                "email": "endpoint.filter@library.com",
+                "password": "password123",
+            },
+            headers=admin_headers,
+        )
+        await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "ENDPOINT-CODE-002",
+                "first_name": "Endpoint",
+                "last_name": "Other",
+                "email": "endpoint.other@library.com",
+                "password": "password123",
+            },
+            headers=admin_headers,
+        )
+
+        response = await client.get(
+            "/api/v1/staff",
+            params={"employee_code": "ENDPOINT-CODE", "email": "endpoint.filter"},
+            headers=admin_headers,
+        )
+
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["email"] == "endpoint.filter@library.com"
 
     async def test_get_staff_endpoint(
         self, client: AsyncClient, admin_headers: dict[str, str]

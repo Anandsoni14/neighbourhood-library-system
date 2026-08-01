@@ -77,6 +77,9 @@ class StaffService:
         role: StaffRole | None = None,
         status: StaffStatus | None = None,
         name: str | None = None,
+        employee_code: str | None = None,
+        email: str | None = None,
+        phone_number: str | None = None,
         sort_by: InstrumentedAttribute[Any] | None = None,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
@@ -91,6 +94,12 @@ class StaffService:
         if name:
             pattern = f"%{name}%"
             filters.append(Staff.first_name.ilike(pattern) | Staff.last_name.ilike(pattern))
+        if employee_code:
+            filters.append(Staff.employee_code.ilike(f"%{employee_code}%"))
+        if email:
+            filters.append(Staff.email.ilike(f"%{email}%"))
+        if phone_number:
+            filters.append(Staff.phone_number.ilike(f"%{phone_number}%"))
 
         staff, total = await self.repository.list_paginated(
             filters=filters,

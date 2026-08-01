@@ -124,8 +124,11 @@ async def list_books(
     title: str | None = Query(None, description="Case-insensitive substring match."),
     author: str | None = Query(None, description="Case-insensitive substring match."),
     category_id: UUID | None = Query(None),
-    isbn: str | None = Query(None, description="Exact match."),
+    isbn: str | None = Query(None, description="Case-insensitive substring match."),
     archived: BookArchiveFilter = Query(BookArchiveFilter.ACTIVE),
+    in_stock: bool | None = Query(
+        None, description="True for books with at least one AVAILABLE copy, False for none."
+    ),
     sort_by: BookSortField = Query(BookSortField.TITLE),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
@@ -142,6 +145,7 @@ async def list_books(
         category_id=category_id,
         isbn=isbn,
         is_archived=_ARCHIVE_FILTERS[archived],
+        in_stock=in_stock,
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,

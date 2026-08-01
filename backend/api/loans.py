@@ -128,19 +128,22 @@ async def list_loans(
     member_id: UUID | None = Query(None),
     copy_id: UUID | None = Query(None),
     status: LoanStatus | None = Query(None),
+    member_name: str | None = Query(None, description="Matches first or last name."),
+    book_title: str | None = Query(None, description="Case-insensitive substring match."),
+    copy_barcode: str | None = Query(None, description="Case-insensitive substring match."),
     sort_by: LoanSortField = Query(LoanSortField.BORROWED_AT),
     sort_dir: SortDir = Query(SortDir.DESC),
     db: AsyncSession = Depends(get_db),
 ) -> Page[LoanResponse]:
-    """List loans. Every supplied filter is applied together.
-
-    Defaults to newest first, which is what a circulation desk wants to see.
-    """
+    """List loans. Filters combine; defaults to newest first."""
     service = LoanService(db)
     loans, total = await service.list_loans(
         member_id=member_id,
         copy_id=copy_id,
         status=status,
+        member_name=member_name,
+        book_title=book_title,
+        copy_barcode=copy_barcode,
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
