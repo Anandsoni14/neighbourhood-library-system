@@ -26,7 +26,10 @@ import { useBooks } from '@/features/books/hooks/useBooks';
 import { BookArchiveFilter, BookSortField } from '@/features/books/types/book.types';
 import type { Book, BookRequest } from '@/features/books/types/book.types';
 import { useCategories } from '@/features/categories/hooks/useCategories';
-import { CategorySortField } from '@/features/categories/types/category.types';
+import {
+  CategoryArchiveFilter,
+  CategorySortField,
+} from '@/features/categories/types/category.types';
 import { BookCopiesDialog } from '@/features/copies/components/BookCopiesDialog';
 import { useBookCopyCounts } from '@/features/copies/hooks/useBookCopyCounts';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -124,7 +127,7 @@ export function BooksPage() {
     void fetchCategories({
       skip: 0,
       limit: 200,
-      includeArchived: false,
+      archived: CategoryArchiveFilter.ACTIVE,
       sortBy: CategorySortField.NAME,
       sortDir: SortDir.ASC,
     });

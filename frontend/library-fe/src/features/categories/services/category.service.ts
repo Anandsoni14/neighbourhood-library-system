@@ -19,7 +19,7 @@ export const categoryService = {
         skip: params.skip,
         limit: params.limit,
         name: nonEmpty(params.name),
-        include_archived: params.includeArchived,
+        archived: params.archived,
         sort_by: params.sortBy,
         sort_dir: params.sortDir,
       },

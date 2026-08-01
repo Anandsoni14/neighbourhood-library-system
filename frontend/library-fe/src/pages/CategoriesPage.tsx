@@ -6,34 +6,54 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import IconButton from '@mui/material/IconButton';
-import LinearProgress from '@mui/material/LinearProgress';
-import Paper from '@mui/material/Paper';
 import Stack from '@mui/material/Stack';
-import Switch from '@mui/material/Switch';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
-import TableRow from '@mui/material/TableRow';
-import TableSortLabel from '@mui/material/TableSortLabel';
-import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { type ChangeEvent, useEffect, useState } from 'react';
+import {
+  GridActionsCellItem,
+  type GridColDef,
+  type GridFilterModel,
+  type GridRowParams,
+  type GridSortModel,
+} from '@mui/x-data-grid';
+import { useEffect, useMemo, useState } from 'react';
 
+import { DataTable } from '@/components/DataTable';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { CategoryFormDialog } from '@/features/categories/components/CategoryFormDialog';
 import { useCategories } from '@/features/categories/hooks/useCategories';
-import { CategorySortField } from '@/features/categories/types/category.types';
+import {
+  CategoryArchiveFilter,
+  CategorySortField,
+} from '@/features/categories/types/category.types';
 import type { Category, CategoryRequest } from '@/features/categories/types/category.types';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { SortDir } from '@/types/common';
+import { useTableQueryParams } from '@/hooks/useTableQueryParams';
+import {
+  containsOnlyOperators,
+  equalsOnlyOperators,
+  filtersFromFilterModel,
+} from '@/utils/gridFilterOperators';
 
-const FILTER_DEBOUNCE_MS = 300;
+type Filters = Record<'name' | 'status', string>;
+
+const emptyFilters: Filters = { name: '', status: '' };
+
+// No default filter: MUI Community's filter panel only supports one active
+// filter at a time, so pre-setting Status would block filtering by anything else.
+const defaultFilters: Filters = emptyFilters;
+
+const STATUS_OPTIONS = ['Active', 'Archived', 'All'];
+
+function statusToArchiveFilter(status: string): CategoryArchiveFilter {
+  if (status === 'Active') {
+    return CategoryArchiveFilter.ACTIVE;
+  }
+  if (status === 'Archived') {
+    return CategoryArchiveFilter.ARCHIVED;
+  }
+  return CategoryArchiveFilter.ALL;
+}
 
 export function CategoriesPage() {
   useDocumentTitle('Categories');
@@ -53,45 +73,40 @@ export function CategoriesPage() {
     clearMutationError,
   } = useCategories();
 
-  const [name, setName] = useState('');
-  const debouncedName = useDebouncedValue(name, FILTER_DEBOUNCE_MS);
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [sortDir, setSortDir] = useState<SortDir>(SortDir.ASC);
+  const {
+    filters,
+    debouncedFilters,
+    setFilters,
+    page,
+    pageSize,
+    setPagination,
+    sortDir,
+    setSort,
+  } = useTableQueryParams<Filters>({
+    defaultFilters,
+    defaultSortField: CategorySortField.NAME,
+  });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [formKey, setFormKey] = useState(0);
 
+  const fetchParams = {
+    skip: page * pageSize,
+    limit: pageSize,
+    name: debouncedFilters.name || undefined,
+    archived: statusToArchiveFilter(debouncedFilters.status),
+    sortBy: CategorySortField.NAME,
+    sortDir,
+  };
+
   useEffect(() => {
-    void fetchCategories({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      name: debouncedName,
-      includeArchived,
-      sortBy: CategorySortField.NAME,
-      sortDir,
-    });
+    void fetchCategories(fetchParams);
     // fetchCategories is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, rowsPerPage, sortDir, debouncedName, includeArchived]);
+  }, [page, pageSize, sortDir, debouncedFilters]);
 
-  const refetch = () => {
-    void fetchCategories({
-      skip: page * rowsPerPage,
-      limit: rowsPerPage,
-      name,
-      includeArchived,
-      sortBy: CategorySortField.NAME,
-      sortDir,
-    });
-  };
-
-  const handleSort = () => {
-    setSortDir(sortDir === SortDir.ASC ? SortDir.DESC : SortDir.ASC);
-    setPage(0);
-  };
+  const refetch = () => void fetchCategories(fetchParams);
 
   const openAddDialog = () => {
     setEditingCategory(null);
@@ -131,6 +146,100 @@ export function CategoriesPage() {
     }
   };
 
+  const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
+    items: (Object.keys(filters) as (keyof Filters)[])
+      .filter((key) => filters[key])
+      .map((key) => ({
+        field: key,
+        operator: key === 'status' ? 'is' : 'contains',
+        value: filters[key],
+      })),
+  }));
+
+  const handleFilterModelChange = (model: GridFilterModel) => {
+    setFilterModel(model);
+    setFilters(filtersFromFilterModel(model, emptyFilters));
+  };
+
+  const handleSortModelChange = (model: GridSortModel) => {
+    const item = model[0];
+    if (item?.sort) {
+      setSort(CategorySortField.NAME, item.sort);
+    }
+  };
+
+  const paginationModel = useMemo(() => ({ page, pageSize }), [page, pageSize]);
+  const sortModel: GridSortModel = useMemo(
+    () => [{ field: 'name', sort: sortDir }],
+    [sortDir],
+  );
+
+  const columns: GridColDef<Category>[] = [
+    { field: 'name', headerName: 'Name', flex: 1, filterOperators: containsOnlyOperators },
+    {
+      field: 'description',
+      headerName: 'Description',
+      flex: 1.5,
+      filterable: false,
+      sortable: false,
+      valueGetter: (_value, row) => row.description ?? '—',
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      width: 130,
+      sortable: false,
+      type: 'singleSelect',
+      valueOptions: STATUS_OPTIONS,
+      filterOperators: equalsOnlyOperators,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.row.is_archived ? 'Archived' : 'Active'}
+          color={params.row.is_archived ? 'default' : 'success'}
+          variant="outlined"
+        />
+      ),
+    },
+    {
+      field: 'actions',
+      type: 'actions',
+      headerName: 'Actions',
+      width: 100,
+      getActions: (params: GridRowParams<Category>) => [
+        <Tooltip key="edit" title={`Edit ${params.row.name}`}>
+          <GridActionsCellItem
+            icon={<EditOutlinedIcon fontSize="small" />}
+            label={`Edit ${params.row.name}`}
+            onClick={() => openEditDialog(params.row)}
+            showInMenu={false}
+          />
+        </Tooltip>,
+        <Tooltip
+          key="archive"
+          title={
+            params.row.is_archived ? `Unarchive ${params.row.name}` : `Archive ${params.row.name}`
+          }
+        >
+          <GridActionsCellItem
+            icon={
+              params.row.is_archived ? (
+                <UnarchiveOutlinedIcon fontSize="small" />
+              ) : (
+                <ArchiveOutlinedIcon fontSize="small" />
+              )
+            }
+            label={
+              params.row.is_archived ? `Unarchive ${params.row.name}` : `Archive ${params.row.name}`
+            }
+            onClick={() => void handleToggleArchive(params.row)}
+            showInMenu={false}
+          />
+        </Tooltip>,
+      ],
+    },
+  ];
+
   return (
     <Box>
       <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -142,121 +251,26 @@ export function CategoriesPage() {
         </Button>
       </Stack>
 
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack
-          direction="row"
-          spacing={2}
-          useFlexGap
-          sx={{ flexWrap: 'wrap', alignItems: 'center' }}
-        >
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(event: ChangeEvent<HTMLInputElement>) => {
-              setName(event.target.value);
-              setPage(0);
-            }}
-            sx={{ minWidth: 220 }}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={includeArchived}
-                onChange={(event) => {
-                  setIncludeArchived(event.target.checked);
-                  setPage(0);
-                }}
-              />
-            }
-            label="Show archived"
-          />
-        </Stack>
-      </Paper>
-
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Paper>
-        {isLoading && <LinearProgress />}
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>
-                  <TableSortLabel active direction={sortDir} onClick={handleSort}>
-                    Name
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {categories.length === 0 && !isLoading && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center">
-                    No categories found.
-                  </TableCell>
-                </TableRow>
-              )}
-              {categories.map((category) => (
-                <TableRow key={category.category_id} hover>
-                  <TableCell>{category.name}</TableCell>
-                  <TableCell>{category.description ?? '—'}</TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      label={category.is_archived ? 'Archived' : 'Active'}
-                      color={category.is_archived ? 'default' : 'success'}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <IconButton
-                      size="small"
-                      aria-label={`Edit ${category.name}`}
-                      onClick={() => openEditDialog(category)}
-                    >
-                      <EditOutlinedIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      aria-label={
-                        category.is_archived
-                          ? `Unarchive ${category.name}`
-                          : `Archive ${category.name}`
-                      }
-                      onClick={() => void handleToggleArchive(category)}
-                    >
-                      {category.is_archived ? (
-                        <UnarchiveOutlinedIcon fontSize="small" />
-                      ) : (
-                        <ArchiveOutlinedIcon fontSize="small" />
-                      )}
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        <TablePagination
-          component="div"
-          count={total}
-          page={page}
-          onPageChange={(_event, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(event) => {
-            setRowsPerPage(Number(event.target.value));
-            setPage(0);
-          }}
-          rowsPerPageOptions={[10, 25, 50]}
-        />
-      </Paper>
+      <DataTable
+        columns={columns}
+        rows={categories}
+        getRowId={(row: Category) => row.category_id}
+        rowCount={total}
+        loading={isLoading}
+        autoHeight
+        paginationModel={paginationModel}
+        onPaginationModelChange={(model) => setPagination(model.page, model.pageSize)}
+        sortModel={sortModel}
+        onSortModelChange={handleSortModelChange}
+        filterModel={filterModel}
+        onFilterModelChange={handleFilterModelChange}
+      />
 
       <CategoryFormDialog
         key={formKey}

@@ -27,8 +27,14 @@ export const categoryFixtures: Category[] = [
   {
     category_id: '66666666-6666-6666-6666-666666666661',
     name: 'Software',
-    description: null,
+    description: 'Programming and software engineering.',
     is_archived: false,
+  },
+  {
+    category_id: '66666666-6666-6666-6666-666666666662',
+    name: 'History',
+    description: null,
+    is_archived: true,
   },
 ];
 
@@ -208,10 +214,12 @@ export const handlers = [
     const skip = Number(url.searchParams.get('skip') ?? '0');
     const limit = Number(url.searchParams.get('limit') ?? '100');
     const name = url.searchParams.get('name');
-    const includeArchived = url.searchParams.get('include_archived') === 'true';
+    const archived = url.searchParams.get('archived') ?? 'active';
 
     const filtered = categories.filter(
-      (category) => matches(category.name, name) && (includeArchived || !category.is_archived),
+      (category) =>
+        matches(category.name, name) &&
+        (archived === 'all' ? true : archived === 'archived' ? category.is_archived : !category.is_archived),
     );
     const page = filtered.slice(skip, skip + limit);
 
