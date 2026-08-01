@@ -11,6 +11,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '@/features/auth/hooks/useAuth';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { ROUTES } from '@/routes/paths';
 
 interface LocationState {
   from?: { pathname: string };
@@ -27,7 +28,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
 
-  const redirectTo = (location.state as LocationState | null)?.from?.pathname ?? '/dashboard';
+  const redirectTo = (location.state as LocationState | null)?.from?.pathname ?? ROUTES.dashboard;
 
   useEffect(() => {
     if (isAuthenticated) {

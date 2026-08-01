@@ -7,6 +7,7 @@ import { AppLayout } from '@/layouts/AppLayout';
 import { LoginPage } from '@/pages/LoginPage';
 
 import { ProtectedRoute } from './ProtectedRoute';
+import { ROUTES } from './paths';
 
 // Everything behind ProtectedRoute is lazy-loaded so the initial bundle only
 // ships the login flow — the rest splits into per-route chunks, fetched on
@@ -40,17 +41,17 @@ export function AppRoutes() {
   return (
     <Suspense fallback={<Loader />}>
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path={ROUTES.login} element={<LoginPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="books" element={<BooksPage />} />
-            <Route path="categories" element={<CategoriesPage />} />
-            <Route path="members" element={<MembersPage />} />
-            <Route path="loans" element={<LoansPage />} />
-            <Route path="staff" element={<StaffPage />} />
+            <Route index element={<Navigate to={ROUTES.dashboard} replace />} />
+            <Route path={ROUTES.dashboard.slice(1)} element={<DashboardPage />} />
+            <Route path={ROUTES.books.slice(1)} element={<BooksPage />} />
+            <Route path={ROUTES.categories.slice(1)} element={<CategoriesPage />} />
+            <Route path={ROUTES.members.slice(1)} element={<MembersPage />} />
+            <Route path={ROUTES.loans.slice(1)} element={<LoansPage />} />
+            <Route path={ROUTES.staff.slice(1)} element={<StaffPage />} />
           </Route>
         </Route>
 

@@ -214,6 +214,9 @@ formatting is Prettier (`singleQuote`, `trailingComma: all`, `printWidth: 100`).
   preview`, with the backend API mocked via Playwright's `page.route`. They don't
   require the real backend or Docker to be running. Specs cover the login flow, books CRUD,
   members CRUD, issuing/returning loans, and the dashboard.
+  Requires `.env` to exist (see [Getting started](#getting-started)) — `VITE_API_BASE_URL` is
+  baked into the bundle at build time, so without it API calls resolve to the wrong path and
+  every spec fails at login.
 
 ## Environment variables
 

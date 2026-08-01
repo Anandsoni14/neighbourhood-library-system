@@ -22,6 +22,7 @@ function seedBooks() {
       category: 'Software',
       description: null,
       published_year: 2008,
+      is_archived: false,
     },
   ];
 }
@@ -49,36 +50,67 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 10 } }),
   );
 
+  // BooksPage also loads the category filter options and, per row, a
+  // copy-count badge — both unrelated to this spec's assertions, but
+  // unmocked requests now reach the real local backend (vite preview proxies
+  // /api/* since Vite 8) and 401 on the fake test token, logging the
+  // session out mid-test.
+  await page.route('**/api/v1/categories**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 200 } }),
+  );
+  await page.route('**/api/v1/book-copies**', (route) =>
+    route.fulfill({ json: { items: [], total: 0, skip: 0, limit: 1 } }),
+  );
+
   await page.route('**/api/v1/books**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
+    const method = request.method();
 
-    if (request.method() === 'GET') {
-      await route.fulfill({ json: { items: books, total: books.length, skip: 0, limit: 25 } });
+    if (method === 'GET') {
+      const archivedFilter = url.searchParams.get('archived') ?? 'active';
+      const items =
+        archivedFilter === 'all'
+          ? books
+          : books.filter((book) => book.is_archived === (archivedFilter === 'archived'));
+      await route.fulfill({ json: { items, total: items.length, skip: 0, limit: 25 } });
       return;
     }
 
-    if (request.method() === 'POST') {
-      const payload = request.postDataJSON() as Omit<(typeof books)[number], 'book_id'>;
-      const created = { ...payload, book_id: `generated-${String(books.length + 1)}` };
-      books = [...books, created];
-      await route.fulfill({ status: 201, json: created });
-      return;
-    }
-
-    const bookId = url.pathname.split('/').pop();
-    if (request.method() === 'PUT') {
-      const payload = request.postDataJSON() as Omit<(typeof books)[number], 'book_id'>;
+    // Books can only be archived/unarchived, never deleted — there is no
+    // DELETE endpoint for books in the API (see api/books.py).
+    if (url.pathname.endsWith('/archive') || url.pathname.endsWith('/unarchive')) {
+      const isArchiving = url.pathname.endsWith('/archive');
+      const bookId = url.pathname.split('/').slice(-2, -1)[0];
       books = books.map((book) =>
-        book.book_id === bookId ? { ...payload, book_id: bookId } : book,
+        book.book_id === bookId ? { ...book, is_archived: isArchiving } : book,
       );
       await route.fulfill({ json: books.find((book) => book.book_id === bookId) });
       return;
     }
 
-    if (request.method() === 'DELETE') {
-      books = books.filter((book) => book.book_id !== bookId);
-      await route.fulfill({ status: 204, body: '' });
+    if (method === 'POST') {
+      const payload = request.postDataJSON() as Omit<
+        (typeof books)[number],
+        'book_id' | 'is_archived'
+      >;
+      const created = {
+        ...payload,
+        book_id: `generated-${String(books.length + 1)}`,
+        is_archived: false,
+      };
+      books = [...books, created];
+      await route.fulfill({ status: 201, json: created });
+      return;
+    }
+
+    if (method === 'PUT') {
+      const bookId = url.pathname.split('/').pop();
+      const payload = request.postDataJSON() as Omit<(typeof books)[number], 'book_id'>;
+      books = books.map((book) =>
+        book.book_id === bookId ? { ...book, ...payload, book_id: bookId } : book,
+      );
+      await route.fulfill({ json: books.find((book) => book.book_id === bookId) });
       return;
     }
 
@@ -91,7 +123,6 @@ test.beforeEach(async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 });
-
 test.describe('books catalog', () => {
   test('navigates to the Books page and lists seeded books', async ({ page }) => {
     await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
@@ -127,12 +158,14 @@ test.describe('books catalog', () => {
     await expect(page.getByText('Clean Code (2nd Edition)')).toBeVisible();
   });
 
-  test('deletes a book after confirmation', async ({ page }) => {
+  test('archives a book, hiding it from the default active list', async ({ page }) => {
     await page.getByRole('navigation').getByRole('link', { name: /books/i }).click();
     await expect(page).toHaveURL(/\/books$/);
+    await expect(page.getByText('Clean Code')).toBeVisible();
 
-    await page.getByRole('button', { name: /delete clean code/i }).click();
-    await page.getByRole('button', { name: 'Delete' }).click();
+    // Books have no delete action — only archive/unarchive (see
+    // api/books.py, which exposes no DELETE /books/{id} route).
+    await page.getByRole('button', { name: /archive clean code/i }).click();
 
     await expect(page.getByText('No books found.')).toBeVisible();
   });

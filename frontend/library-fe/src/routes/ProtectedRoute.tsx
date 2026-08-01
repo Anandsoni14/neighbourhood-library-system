@@ -3,6 +3,8 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Loader } from '@/components/Loader';
 import { useAuth } from '@/features/auth/hooks/useAuth';
 
+import { ROUTES } from './paths';
+
 /**
  * Gates every route nested under it behind authentication. A persisted
  * token's validity is confirmed asynchronously (see useAuthBootstrap), so
@@ -18,7 +20,7 @@ export function ProtectedRoute() {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to={ROUTES.login} state={{ from: location }} replace />;
   }
 
   return <Outlet />;
