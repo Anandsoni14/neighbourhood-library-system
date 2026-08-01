@@ -1,15 +1,8 @@
-import Alert from '@mui/material/Alert';
 import Autocomplete from '@mui/material/Autocomplete';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import { type FormEvent, useEffect, useState } from 'react';
 
+import { FormDialog } from '@/components/FormDialog';
 import type { Book } from '@/features/books/types/book.types';
 import { useBooks } from '@/features/books/hooks/useBooks';
 import { copyService } from '@/features/copies/services/copy.service';
@@ -127,61 +120,52 @@ export function IssueLoanDialog({
   const displayedError = fieldError ?? error;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Issue loan</DialogTitle>
-      <Box component="form" onSubmit={handleSubmit} noValidate>
-        <DialogContent>
-          <Stack spacing={2}>
-            {displayedError && <Alert severity="error">{displayedError}</Alert>}
-            <Autocomplete
-              options={books}
-              getOptionLabel={(book) => `${book.title} — ${book.author}`}
-              value={selectedBook}
-              onChange={(_event, value) => {
-                setSelectedBook(value);
-                setSelectedCopy(null);
-              }}
-              onInputChange={handleBookInputChange}
-              renderInput={(params) => <TextField {...params} label="Book" autoFocus />}
-            />
-            <Autocomplete
-              options={availableCopies}
-              getOptionLabel={(copy) => `${copy.barcode} (${copy.condition})`}
-              value={selectedCopy}
-              onChange={(_event, value) => setSelectedCopy(value)}
-              disabled={!selectedBook}
-              loading={copiesLoading}
-              renderInput={(params) => <TextField {...params} label="Copy" />}
-            />
-            <Autocomplete
-              options={members}
-              getOptionLabel={(member) =>
-                `${member.first_name} ${member.last_name} (${member.email})`
-              }
-              value={selectedMember}
-              onChange={(_event, value) => setSelectedMember(value)}
-              onInputChange={handleMemberInputChange}
-              renderInput={(params) => <TextField {...params} label="Member" />}
-            />
-            <TextField
-              label="Remarks"
-              value={remarks}
-              onChange={(event) => setRemarks(event.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting || !canSubmit}>
-            Issue loan
-          </Button>
-        </DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      title="Issue loan"
+      isSubmitting={isSubmitting}
+      canSubmit={canSubmit}
+      submitLabel="Issue loan"
+      error={displayedError}
+      onSubmit={handleSubmit}
+    >
+      <Autocomplete
+        options={books}
+        getOptionLabel={(book) => `${book.title} — ${book.author}`}
+        value={selectedBook}
+        onChange={(_event, value) => {
+          setSelectedBook(value);
+          setSelectedCopy(null);
+        }}
+        onInputChange={handleBookInputChange}
+        renderInput={(params) => <TextField {...params} label="Book" autoFocus />}
+      />
+      <Autocomplete
+        options={availableCopies}
+        getOptionLabel={(copy) => `${copy.barcode} (${copy.condition})`}
+        value={selectedCopy}
+        onChange={(_event, value) => setSelectedCopy(value)}
+        disabled={!selectedBook}
+        loading={copiesLoading}
+        renderInput={(params) => <TextField {...params} label="Copy" />}
+      />
+      <Autocomplete
+        options={members}
+        getOptionLabel={(member) => `${member.first_name} ${member.last_name} (${member.email})`}
+        value={selectedMember}
+        onChange={(_event, value) => setSelectedMember(value)}
+        onInputChange={handleMemberInputChange}
+        renderInput={(params) => <TextField {...params} label="Member" />}
+      />
+      <TextField
+        label="Remarks"
+        value={remarks}
+        onChange={(event) => setRemarks(event.target.value)}
+        fullWidth
+        multiline
+        minRows={2}
+      />
+    </FormDialog>
   );
 }

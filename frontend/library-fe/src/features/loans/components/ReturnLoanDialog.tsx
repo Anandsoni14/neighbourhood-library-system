@@ -1,19 +1,12 @@
-import Alert from '@mui/material/Alert';
-import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
-import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
-import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
 import Select, { type SelectChangeEvent } from '@mui/material/Select';
-import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import { type FormEvent, useState } from 'react';
 
+import { FormDialog } from '@/components/FormDialog';
 import { CopyCondition } from '@/types/api';
 
 import type { Loan, LoanReturnRequest } from '../types/loan.types';
@@ -64,46 +57,40 @@ export function ReturnLoanDialog({
   const displayedError = fieldError ?? error;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Return loan</DialogTitle>
-      <Box component="form" onSubmit={handleSubmit} noValidate>
-        <DialogContent>
-          <Stack spacing={2}>
-            <DialogContentText>Returning copy for loan {loan?.loan_id ?? ''}.</DialogContentText>
-            {displayedError && <Alert severity="error">{displayedError}</Alert>}
-            <FormControl fullWidth required>
-              <InputLabel id="return-condition-label">Return condition</InputLabel>
-              <Select
-                labelId="return-condition-label"
-                label="Return condition"
-                value={condition}
-                onChange={handleConditionChange}
-              >
-                <MenuItem value={CopyCondition.NEW}>New</MenuItem>
-                <MenuItem value={CopyCondition.GOOD}>Good</MenuItem>
-                <MenuItem value={CopyCondition.FAIR}>Fair</MenuItem>
-                <MenuItem value={CopyCondition.DAMAGED}>Damaged</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label="Remarks"
-              value={remarks}
-              onChange={(event) => setRemarks(event.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="contained" disabled={isSubmitting || !canSubmit}>
-            Return
-          </Button>
-        </DialogActions>
-      </Box>
-    </Dialog>
+    <FormDialog
+      open={open}
+      onClose={onClose}
+      title="Return loan"
+      maxWidth="xs"
+      isSubmitting={isSubmitting}
+      canSubmit={canSubmit}
+      submitLabel="Return"
+      error={displayedError}
+      onSubmit={handleSubmit}
+    >
+      <DialogContentText>Returning copy for loan {loan?.loan_id ?? ''}.</DialogContentText>
+      <FormControl fullWidth required>
+        <InputLabel id="return-condition-label">Return condition</InputLabel>
+        <Select
+          labelId="return-condition-label"
+          label="Return condition"
+          value={condition}
+          onChange={handleConditionChange}
+        >
+          <MenuItem value={CopyCondition.NEW}>New</MenuItem>
+          <MenuItem value={CopyCondition.GOOD}>Good</MenuItem>
+          <MenuItem value={CopyCondition.FAIR}>Fair</MenuItem>
+          <MenuItem value={CopyCondition.DAMAGED}>Damaged</MenuItem>
+        </Select>
+      </FormControl>
+      <TextField
+        label="Remarks"
+        value={remarks}
+        onChange={(event) => setRemarks(event.target.value)}
+        fullWidth
+        multiline
+        minRows={2}
+      />
+    </FormDialog>
   );
 }
