@@ -1,19 +1,9 @@
-import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import {
-  type GridColDef,
-  type GridFilterModel,
-  type GridRowParams,
-  type GridSortModel,
-} from '@mui/x-data-grid';
+import { type GridFilterModel, type GridSortModel } from '@mui/x-data-grid';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
-import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { PageHeader } from '@/components/PageHeader';
 import { CategoryFormDialog } from '@/features/categories/components/CategoryFormDialog';
@@ -25,21 +15,15 @@ import {
 import type { Category, CategoryRequest } from '@/features/categories/types/category.types';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useTableQueryParams } from '@/hooks/useTableQueryParams';
-import {
-  containsOnlyOperators,
-  equalsOnlyOperators,
-  filtersFromFilterModel,
-} from '@/utils/gridFilterOperators';
+import { filtersFromFilterModel } from '@/utils/gridFilterOperators';
+
+import { getCategoriesColumns } from './CategoriesPage.columns';
 
 type Filters = Record<'name' | 'status', string>;
 
 const emptyFilters: Filters = { name: '', status: '' };
 
-// No default filter: MUI Community's filter panel only supports one active
-// filter at a time, so pre-setting Status would block filtering by anything else.
 const defaultFilters: Filters = emptyFilters;
-
-const STATUS_OPTIONS = ['Active', 'Archived', 'All'];
 
 function statusToArchiveFilter(status: string): CategoryArchiveFilter {
   if (status === 'Active') {
@@ -169,60 +153,10 @@ export function CategoriesPage() {
     [sortDir],
   );
 
-  const columns: GridColDef<Category>[] = [
-    { field: 'name', headerName: 'Name', flex: 1, filterOperators: containsOnlyOperators },
-    {
-      field: 'description',
-      headerName: 'Description',
-      flex: 1.5,
-      filterable: false,
-      sortable: false,
-      valueGetter: (_value, row) => row.description ?? '—',
-    },
-    {
-      field: 'status',
-      headerName: 'Status',
-      width: 130,
-      sortable: false,
-      type: 'singleSelect',
-      valueOptions: STATUS_OPTIONS,
-      filterOperators: equalsOnlyOperators,
-      renderCell: (params) => (
-        <Chip
-          size="small"
-          label={params.row.is_archived ? 'Archived' : 'Active'}
-          color={params.row.is_archived ? 'default' : 'success'}
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: 'actions',
-      type: 'actions',
-      headerName: 'Actions',
-      width: 100,
-      getActions: (params: GridRowParams<Category>) => [
-        <DataTableActionButton
-          key="edit"
-          label="Edit"
-          icon={<EditOutlinedIcon fontSize="small" />}
-          onClick={() => openEditDialog(params.row)}
-        />,
-        <DataTableActionButton
-          key="archive"
-          label={params.row.is_archived ? 'Unarchive' : 'Archive'}
-          icon={
-            params.row.is_archived ? (
-              <UnarchiveOutlinedIcon fontSize="small" />
-            ) : (
-              <ArchiveOutlinedIcon fontSize="small" />
-            )
-          }
-          onClick={() => void handleToggleArchive(params.row)}
-        />,
-      ],
-    },
-  ];
+  const columns = getCategoriesColumns({
+    onEdit: openEditDialog,
+    onToggleArchive: handleToggleArchive,
+  });
 
   return (
     <Box>

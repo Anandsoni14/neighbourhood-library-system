@@ -1,4 +1,3 @@
-import AssignmentReturnOutlinedIcon from '@mui/icons-material/AssignmentReturnOutlined';
 import AutoStoriesOutlinedIcon from '@mui/icons-material/AutoStoriesOutlined';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import SwapHorizOutlinedIcon from '@mui/icons-material/SwapHorizOutlined';
@@ -11,19 +10,12 @@ import CardContent from '@mui/material/CardContent';
 import Grid from '@mui/material/Grid';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import {
-  type GridCellParams,
-  type GridColDef,
-  type GridFilterModel,
-  type GridRowParams,
-  type GridSortModel,
-} from '@mui/x-data-grid';
+import { type GridCellParams, type GridFilterModel, type GridSortModel } from '@mui/x-data-grid';
 import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { DataTable } from '@/components/DataTable';
-import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/features/auth/hooks/useAuth';
@@ -40,7 +32,9 @@ import type { Member } from '@/features/members/types/member.types';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { SortDir } from '@/types/common';
-import { containsOnlyOperators, filtersFromFilterModel } from '@/utils/gridFilterOperators';
+import { filtersFromFilterModel } from '@/utils/gridFilterOperators';
+
+import { getDashboardColumns } from './DashboardPage.columns';
 
 interface SummaryCard {
   label: string;
@@ -52,10 +46,6 @@ interface SummaryCard {
 type Filters = Record<'member' | 'book', string>;
 
 const emptyFilters: Filters = { member: '', book: '' };
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleString();
-}
 
 export function DashboardPage() {
   useDocumentTitle('Dashboard');
@@ -107,14 +97,11 @@ export function DashboardPage() {
 
   useEffect(() => {
     void fetchDashboard();
-    // Fetched once on mount; the overdue-loans count here is independent of
-    // whatever the widget below is currently filtered/paged to.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     void fetchOverdueLoans(overdueParams);
-    // fetchOverdueLoans is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, sortField, sortDir, debouncedFilters]);
 
@@ -187,74 +174,7 @@ export function DashboardPage() {
     [sortField, sortDir],
   );
 
-  const columns: GridColDef<OverdueLoan>[] = [
-    {
-      field: 'member',
-      headerName: 'Member',
-      flex: 1,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => {
-        const member = members[row.member_id];
-        return member ? `${member.first_name} ${member.last_name}` : '…';
-      },
-    },
-    {
-      field: 'book',
-      headerName: 'Book',
-      flex: 1,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => {
-        const copy = copies[row.copy_id];
-        const book = copy ? books[copy.book_id] : undefined;
-        return copy ? `${book ? book.title : '…'} (${copy.barcode})` : '…';
-      },
-    },
-    {
-      field: 'due_at',
-      headerName: 'Due at',
-      flex: 1,
-      filterable: false,
-      valueGetter: (_value, row) => formatDate(row.due_at),
-    },
-    {
-      field: 'borrowed_at',
-      headerName: 'Borrowed at',
-      flex: 1,
-      filterable: false,
-      valueGetter: (_value, row) => formatDate(row.borrowed_at),
-    },
-    {
-      field: 'days_overdue',
-      headerName: 'Days overdue',
-      width: 130,
-      sortable: false,
-      filterable: false,
-    },
-    {
-      field: 'estimated_fine',
-      headerName: 'Estimated fine',
-      width: 130,
-      sortable: false,
-      filterable: false,
-      valueGetter: (_value, row) => Number(row.estimated_fine).toFixed(2),
-    },
-    {
-      field: 'actions',
-      type: 'actions',
-      headerName: 'Actions',
-      width: 80,
-      getActions: (params: GridRowParams<OverdueLoan>) => [
-        <DataTableActionButton
-          key="return"
-          label="Return"
-          icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
-          onClick={() => openReturnDialog(params.row)}
-        />,
-      ],
-    },
-  ];
+  const columns = getDashboardColumns({ members, copies, books, onReturn: openReturnDialog });
 
   const summaryCards: SummaryCard[] = [
     { label: 'Books', value: counts?.books ?? 0, icon: <AutoStoriesOutlinedIcon />, to: '/books' },

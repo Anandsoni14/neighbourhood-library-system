@@ -1,20 +1,9 @@
-import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
-import UnarchiveOutlinedIcon from '@mui/icons-material/UnarchiveOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import {
-  type GridColDef,
-  type GridFilterModel,
-  type GridRowParams,
-  type GridSortModel,
-} from '@mui/x-data-grid';
+import { type GridFilterModel, type GridSortModel } from '@mui/x-data-grid';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
-import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { PageHeader } from '@/components/PageHeader';
 import { BookFormDialog } from '@/features/books/components/BookFormDialog';
@@ -31,11 +20,9 @@ import { useBookCopyCounts } from '@/features/copies/hooks/useBookCopyCounts';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { SortDir } from '@/types/common';
-import {
-  containsOnlyOperators,
-  equalsOnlyOperators,
-  filtersFromFilterModel,
-} from '@/utils/gridFilterOperators';
+import { filtersFromFilterModel } from '@/utils/gridFilterOperators';
+
+import { getBooksColumns } from './BooksPage.columns';
 
 type Filters = Record<'title' | 'author' | 'category' | 'isbn' | 'status' | 'stock', string>;
 
@@ -47,13 +34,7 @@ const emptyFilters: Filters = {
   status: '',
   stock: '',
 };
-
-// No default filter: MUI Community's filter panel only supports one active
-// filter at a time, so pre-setting Status would block filtering by anything else.
 const defaultFilters: Filters = emptyFilters;
-
-const STATUS_OPTIONS = ['Active', 'Archived', 'All'];
-const STOCK_OPTIONS = ['In Stock', 'Out of Stock'];
 
 function statusToArchiveFilter(status: string): BookArchiveFilter {
   if (status === 'Active') {
@@ -114,8 +95,6 @@ export function BooksPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
-  // Bumped on every open so BookFormDialog remounts (and re-seeds its fields
-  // from `editingBook`) instead of needing an effect to reset its state.
   const [formKey, setFormKey] = useState(0);
   const [viewingCopiesBook, setViewingCopiesBook] = useState<Book | null>(null);
 
@@ -127,7 +106,6 @@ export function BooksPage() {
       sortBy: CategorySortField.NAME,
       sortDir: SortDir.ASC,
     });
-    // Fetched once on mount to populate the category dropdown/filter.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -146,8 +124,6 @@ export function BooksPage() {
 
   useEffect(() => {
     void fetchBooks(fetchParams);
-    // fetchBooks is a stable dispatch wrapper; including it (or the object
-    // literal above) would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, sortField, sortDir, debouncedFilters]);
 
@@ -191,9 +167,6 @@ export function BooksPage() {
     }
   };
 
-  // Local state, not derived from committed `filters` (which drops empty
-  // values) — otherwise picking a new Column before typing a Value would
-  // vanish on the next render as the controlled prop snaps back.
   const [filterModel, setFilterModel] = useState<GridFilterModel>(() => ({
     items: (Object.keys(filters) as (keyof Filters)[])
       .filter((key) => filters[key])
@@ -216,111 +189,19 @@ export function BooksPage() {
     }
   };
 
-  // Memoized: DataGrid compares controlled paginationModel/sortModel by
-  // reference, so a fresh literal every render causes it to re-sync to page 0.
   const paginationModel = useMemo(() => ({ page, pageSize }), [page, pageSize]);
   const sortModel: GridSortModel = useMemo(
     () => [{ field: sortField, sort: sortDir }],
     [sortField, sortDir],
   );
 
-  // Not memoized: closes over render-scoped state (categories, copyCounts,
-  // handleToggleArchive) that would all need to be deps anyway; recomputing
-  // this small array each render is cheap and avoids stale-closure bugs.
-  const columns: GridColDef<Book>[] = [
-    { field: 'title', headerName: 'Title', flex: 1.2, filterOperators: containsOnlyOperators },
-    { field: 'author', headerName: 'Author', flex: 1, filterOperators: containsOnlyOperators },
-    {
-      field: 'category',
-      headerName: 'Category',
-      flex: 1,
-      type: 'singleSelect',
-      valueOptions: categories.map((category) => ({
-        value: category.category_id,
-        label: category.name,
-      })),
-      valueGetter: (_value, row) => row.category?.category_id ?? '',
-      renderCell: (params) => params.row.category?.name ?? '—',
-      filterOperators: equalsOnlyOperators,
-    },
-    {
-      field: 'published_year',
-      headerName: 'Year',
-      width: 100,
-      filterable: false,
-      valueGetter: (_value, row) => row.published_year ?? '—',
-    },
-    {
-      field: 'isbn',
-      headerName: 'ISBN',
-      flex: 1,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => row.isbn ?? '—',
-    },
-    {
-      field: 'status',
-      headerName: 'Status',
-      width: 130,
-      sortable: false,
-      type: 'singleSelect',
-      valueOptions: STATUS_OPTIONS,
-      filterOperators: equalsOnlyOperators,
-      renderCell: (params) => (
-        <Chip
-          size="small"
-          label={params.row.is_archived ? 'Archived' : 'Active'}
-          color={params.row.is_archived ? 'default' : 'success'}
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: 'stock',
-      headerName: 'Stock',
-      width: 130,
-      sortable: false,
-      type: 'singleSelect',
-      valueOptions: STOCK_OPTIONS,
-      filterOperators: equalsOnlyOperators,
-      renderCell: (params) => {
-        const counts = copyCounts[params.row.book_id];
-        return counts ? `${counts.available} / ${counts.total}` : '…';
-      },
-    },
-    {
-      field: 'actions',
-      type: 'actions',
-      headerName: 'Actions',
-      width: 140,
-      getActions: (params: GridRowParams<Book>) => [
-        <DataTableActionButton
-          key="view-copies"
-          label="Copies"
-          icon={<Inventory2OutlinedIcon fontSize="small" />}
-          onClick={() => setViewingCopiesBook(params.row)}
-        />,
-        <DataTableActionButton
-          key="edit"
-          label="Edit"
-          icon={<EditOutlinedIcon fontSize="small" />}
-          onClick={() => openEditDialog(params.row)}
-        />,
-        <DataTableActionButton
-          key="archive"
-          label={params.row.is_archived ? 'Unarchive' : 'Archive'}
-          icon={
-            params.row.is_archived ? (
-              <UnarchiveOutlinedIcon fontSize="small" />
-            ) : (
-              <ArchiveOutlinedIcon fontSize="small" />
-            )
-          }
-          onClick={() => void handleToggleArchive(params.row)}
-        />,
-      ],
-    },
-  ];
+  const columns = getBooksColumns({
+    categories,
+    copyCounts,
+    onViewCopies: setViewingCopiesBook,
+    onEdit: openEditDialog,
+    onToggleArchive: handleToggleArchive,
+  });
 
   return (
     <Box>

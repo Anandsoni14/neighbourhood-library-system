@@ -1,17 +1,9 @@
-import AssignmentReturnOutlinedIcon from '@mui/icons-material/AssignmentReturnOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import {
-  type GridColDef,
-  type GridFilterModel,
-  type GridRowParams,
-  type GridSortModel,
-} from '@mui/x-data-grid';
+import { type GridFilterModel, type GridSortModel } from '@mui/x-data-grid';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
-import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { PageHeader } from '@/components/PageHeader';
 import { IssueLoanDialog } from '@/features/loans/components/IssueLoanDialog';
@@ -24,19 +16,15 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { LoanStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
-import {
-  containsOnlyOperators,
-  equalsOnlyOperators,
-  filtersFromFilterModel,
-} from '@/utils/gridFilterOperators';
+import { filtersFromFilterModel } from '@/utils/gridFilterOperators';
+
+import { getLoansColumns } from './LoansPage.columns';
 
 type Filters = Record<'member' | 'book' | 'barcode' | 'status', string>;
 
 const emptyFilters: Filters = { member: '', book: '', barcode: '', status: '' };
 
 const defaultFilters: Filters = emptyFilters;
-
-const STATUS_OPTIONS = ['Active', 'Returned'];
 
 function statusToLoanStatus(status: string): LoanStatus | undefined {
   if (status === 'Active') {
@@ -46,13 +34,6 @@ function statusToLoanStatus(status: string): LoanStatus | undefined {
     return LoanStatus.RETURNED;
   }
   return undefined;
-}
-
-function formatDate(value: string | null): string {
-  if (!value) {
-    return '—';
-  }
-  return new Date(value).toLocaleString();
 }
 
 export function LoansPage() {
@@ -107,7 +88,6 @@ export function LoansPage() {
 
   useEffect(() => {
     void fetchLoans(fetchParams);
-    // fetchLoans is a stable dispatch wrapper; including it would just add noise.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, sortField, sortDir, debouncedFilters]);
 
@@ -182,105 +162,7 @@ export function LoansPage() {
     [sortField, sortDir],
   );
 
-  const columns: GridColDef<Loan>[] = [
-    {
-      field: 'member',
-      headerName: 'Member',
-      flex: 1,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => {
-        const member = members[row.member_id];
-        return member ? `${member.first_name} ${member.last_name}` : '…';
-      },
-    },
-    {
-      field: 'book',
-      headerName: 'Book',
-      flex: 1,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => {
-        const copy = copies[row.copy_id];
-        const book = copy ? books[copy.book_id] : undefined;
-        return book ? book.title : '…';
-      },
-    },
-    {
-      field: 'barcode',
-      headerName: 'Copy barcode',
-      flex: 0.8,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => copies[row.copy_id]?.barcode ?? '…',
-    },
-    {
-      field: 'borrowed_at',
-      headerName: 'Borrowed at',
-      flex: 1,
-      filterable: false,
-      valueGetter: (_value, row) => formatDate(row.borrowed_at),
-    },
-    {
-      field: 'due_at',
-      headerName: 'Due at',
-      flex: 1,
-      filterable: false,
-      valueGetter: (_value, row) => formatDate(row.due_at),
-    },
-    {
-      field: 'returned_at',
-      headerName: 'Returned at',
-      flex: 1,
-      filterable: false,
-      valueGetter: (_value, row) => formatDate(row.returned_at),
-    },
-    {
-      field: 'status',
-      headerName: 'Status',
-      width: 130,
-      type: 'singleSelect',
-      valueOptions: STATUS_OPTIONS,
-      filterOperators: equalsOnlyOperators,
-      renderCell: (params) => (
-        <Chip
-          size="small"
-          label={params.row.status}
-          color={params.row.status === LoanStatus.ACTIVE ? 'info' : 'success'}
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: 'calculated_fine',
-      headerName: 'Fine',
-      width: 100,
-      filterable: false,
-      renderCell: (params) =>
-        params.row.status === LoanStatus.RETURNED
-          ? Number(params.row.calculated_fine).toFixed(2)
-          : '—',
-    },
-    {
-      field: 'actions',
-      type: 'actions',
-      headerName: 'Actions',
-      width: 80,
-      getActions: (params: GridRowParams<Loan>) => {
-        if (params.row.status !== LoanStatus.ACTIVE) {
-          return [];
-        }
-        return [
-          <DataTableActionButton
-            key="return"
-            label="Return"
-            icon={<AssignmentReturnOutlinedIcon fontSize="small" />}
-            onClick={() => openReturnDialog(params.row)}
-          />,
-        ];
-      },
-    },
-  ];
+  const columns = getLoansColumns({ members, copies, books, onReturn: openReturnDialog });
 
   return (
     <Box>

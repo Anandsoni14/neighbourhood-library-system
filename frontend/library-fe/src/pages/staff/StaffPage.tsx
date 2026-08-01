@@ -1,19 +1,9 @@
-import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
-import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import {
-  type GridColDef,
-  type GridFilterModel,
-  type GridRowParams,
-  type GridSortModel,
-} from '@mui/x-data-grid';
+import { type GridFilterModel, type GridSortModel } from '@mui/x-data-grid';
 import { useEffect, useMemo, useState } from 'react';
 
 import { DataTable } from '@/components/DataTable';
-import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/features/auth/hooks/useAuth';
@@ -29,11 +19,9 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { StaffRole, StaffStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
-import {
-  containsOnlyOperators,
-  equalsOnlyOperators,
-  filtersFromFilterModel,
-} from '@/utils/gridFilterOperators';
+import { filtersFromFilterModel } from '@/utils/gridFilterOperators';
+
+import { getStaffColumns } from './StaffPage.columns';
 
 type Filters = Record<'employeeCode' | 'name' | 'email' | 'phone' | 'role' | 'status', string>;
 
@@ -46,12 +34,7 @@ const emptyFilters: Filters = {
   status: '',
 };
 
-// No default filter: MUI Community's filter panel only supports one active
-// filter at a time, so pre-setting Status would block filtering by anything else.
 const defaultFilters: Filters = emptyFilters;
-
-const ROLE_OPTIONS = ['Admin', 'Librarian'];
-const STATUS_OPTIONS = ['Active', 'Inactive'];
 
 function roleToStaffRole(role: string): StaffRole | undefined {
   if (role === 'Admin') {
@@ -73,8 +56,6 @@ function statusToStaffStatus(status: string): StaffStatus | undefined {
   return undefined;
 }
 
-// The DataGrid shows one merged "Name" column (the backend's `name` filter
-// already matches first-or-last), sorted by last name.
 function toBackendSortField(gridField: string): StaffSortField {
   return gridField === 'name' ? StaffSortField.LAST_NAME : (gridField as StaffSortField);
 }
@@ -223,92 +204,7 @@ export function StaffPage() {
     }
   };
 
-  const columns: GridColDef<Staff>[] = [
-    {
-      field: 'employeeCode',
-      headerName: 'Employee code',
-      flex: 0.8,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => row.employee_code,
-    },
-    {
-      field: 'name',
-      headerName: 'Name',
-      flex: 1,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => `${row.first_name} ${row.last_name}`,
-    },
-    { field: 'email', headerName: 'Email', flex: 1, filterOperators: containsOnlyOperators },
-    {
-      field: 'phone',
-      headerName: 'Phone',
-      flex: 0.8,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => row.phone_number ?? '—',
-    },
-    {
-      field: 'role',
-      headerName: 'Role',
-      width: 130,
-      type: 'singleSelect',
-      valueOptions: ROLE_OPTIONS,
-      filterOperators: equalsOnlyOperators,
-      renderCell: (params) => (
-        <Chip
-          size="small"
-          label={params.row.role}
-          color={params.row.role === StaffRole.ADMIN ? 'info' : 'default'}
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: 'status',
-      headerName: 'Status',
-      width: 130,
-      type: 'singleSelect',
-      valueOptions: STATUS_OPTIONS,
-      filterOperators: equalsOnlyOperators,
-      renderCell: (params) => (
-        <Chip
-          size="small"
-          label={params.row.status}
-          color={params.row.status === StaffStatus.ACTIVE ? 'success' : 'default'}
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: 'actions',
-      type: 'actions',
-      headerName: 'Actions',
-      width: 100,
-      getActions: (params: GridRowParams<Staff>) => {
-        const isActive = params.row.status === StaffStatus.ACTIVE;
-        return [
-          <DataTableActionButton
-            key="edit"
-            label="Edit"
-            icon={<EditOutlinedIcon fontSize="small" />}
-            onClick={() => openEditDialog(params.row)}
-          />,
-          <DataTableActionButton
-            key="toggle"
-            label={isActive ? 'Deactivate' : 'Activate'}
-            icon={
-              isActive ? (
-                <BlockOutlinedIcon fontSize="small" />
-              ) : (
-                <CheckCircleOutlineOutlinedIcon fontSize="small" />
-              )
-            }
-            onClick={() => void handleToggleStatus(params.row)}
-          />,
-        ];
-      },
-    },
-  ];
+  const columns = getStaffColumns({ onEdit: openEditDialog, onToggleStatus: handleToggleStatus });
 
   return (
     <Box>

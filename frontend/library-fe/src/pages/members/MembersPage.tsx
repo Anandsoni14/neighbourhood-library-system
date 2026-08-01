@@ -1,19 +1,10 @@
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import {
-  type GridColDef,
-  type GridFilterModel,
-  type GridRowParams,
-  type GridSortModel,
-} from '@mui/x-data-grid';
+import { type GridFilterModel, type GridSortModel } from '@mui/x-data-grid';
 import { useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DataTable } from '@/components/DataTable';
-import { DataTableActionButton } from '@/components/DataTableActionButton';
 import { FeedbackSnackbar } from '@/components/FeedbackSnackbar';
 import { PageHeader } from '@/components/PageHeader';
 import { MemberLoanHistoryDialog } from '@/features/loans/components/MemberLoanHistoryDialog';
@@ -25,25 +16,15 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useTableQueryParams } from '@/hooks/useTableQueryParams';
 import { MembershipStatus } from '@/types/api';
 import { SortDir } from '@/types/common';
-import {
-  containsOnlyOperators,
-  equalsOnlyOperators,
-  filtersFromFilterModel,
-} from '@/utils/gridFilterOperators';
+import { filtersFromFilterModel } from '@/utils/gridFilterOperators';
+
+import { getMembersColumns } from './MembersPage.columns';
 
 type Filters = Record<'name' | 'email' | 'phone' | 'status', string>;
 
 const emptyFilters: Filters = { name: '', email: '', phone: '', status: '' };
 
 const defaultFilters: Filters = emptyFilters;
-
-const STATUS_OPTIONS = ['Active', 'Blocked', 'Inactive'];
-
-const statusColors: Record<MembershipStatus, 'success' | 'error' | 'default'> = {
-  [MembershipStatus.ACTIVE]: 'success',
-  [MembershipStatus.BLOCKED]: 'error',
-  [MembershipStatus.INACTIVE]: 'default',
-};
 
 const SORT_FIELD_BY_GRID_FIELD: Record<string, MemberSortField> = {
   name: MemberSortField.LAST_NAME,
@@ -194,60 +175,7 @@ export function MembersPage() {
     [sortField, sortDir],
   );
 
-  const columns: GridColDef<Member>[] = [
-    {
-      field: 'name',
-      headerName: 'Name',
-      flex: 1,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => `${row.first_name} ${row.last_name}`,
-    },
-    { field: 'email', headerName: 'Email', flex: 1, filterOperators: containsOnlyOperators },
-    {
-      field: 'phone',
-      headerName: 'Phone',
-      flex: 1,
-      sortable: false,
-      filterOperators: containsOnlyOperators,
-      valueGetter: (_value, row) => row.phone_number ?? '—',
-    },
-    {
-      field: 'status',
-      headerName: 'Status',
-      width: 130,
-      type: 'singleSelect',
-      valueOptions: STATUS_OPTIONS,
-      filterOperators: equalsOnlyOperators,
-      renderCell: (params) => (
-        <Chip
-          size="small"
-          label={params.row.membership_status}
-          color={statusColors[params.row.membership_status]}
-          variant="outlined"
-        />
-      ),
-    },
-    {
-      field: 'actions',
-      type: 'actions',
-      headerName: 'Actions',
-      width: 100,
-      getActions: (params: GridRowParams<Member>) => [
-        <DataTableActionButton
-          key="edit"
-          label="Edit"
-          icon={<EditOutlinedIcon fontSize="small" />}
-          onClick={() => openEditDialog(params.row)}
-        />,
-        <DataTableActionButton
-          key="delete"
-          label="Delete"
-          icon={<DeleteOutlineIcon fontSize="small" />}
-          onClick={() => setDeletingMember(params.row)}
-        />,
-      ],
-    },
-  ];
+  const columns = getMembersColumns({ onEdit: openEditDialog, onDelete: setDeletingMember });
 
   return (
     <Box>
