@@ -1,3 +1,4 @@
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -5,8 +6,9 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ConflictError, NotFoundError
-from models.enums import MembershipStatus
+from models.enums import MembershipStatus, TransactionType
 from services.member import MemberService
+from services.transaction import TransactionService
 
 
 @pytest.fixture
@@ -150,6 +152,23 @@ class TestMemberService:
         results, total = await member_service.list_members(name="Alice")
         assert total == 1
         assert results[0].first_name == "Alice"
+
+    async def test_delete_member_with_transaction_only_history_raises_conflict(
+        self, member_service: MemberService, db: AsyncSession
+    ) -> None:
+        """Distinct from the loan-history case pinned in test_error_mapping.py:
+        this member has a Transaction row but no Loan at all."""
+        member = await member_service.create_member(
+            first_name="Has", last_name="Transaction", email="has.transaction@example.com"
+        )
+        await TransactionService(db).create_transaction(
+            member_id=member.member_id,
+            transaction_type=TransactionType.WAIVER,
+            amount=Decimal("0.00"),
+        )
+
+        with pytest.raises(ConflictError):
+            await member_service.delete_member(member.member_id)
 
 
 class TestMembersAPI:
@@ -396,6 +415,34 @@ class TestMembersAPI:
         )
         assert response.status_code == 200
         assert response.json()["membership_status"] == "ACTIVE"
+
+    async def test_suspend_and_reactivate_member_endpoints_are_idempotent(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/members",
+            json={"first_name": "Idem", "last_name": "Potent", "email": "idem.potent@example.com"},
+            headers=librarian_headers,
+        )
+        member_id = create_response.json()["member_id"]
+
+        first_suspend = await client.post(
+            f"/api/v1/members/{member_id}/suspend", headers=librarian_headers
+        )
+        second_suspend = await client.post(
+            f"/api/v1/members/{member_id}/suspend", headers=librarian_headers
+        )
+        assert first_suspend.status_code == second_suspend.status_code == 200
+        assert second_suspend.json()["membership_status"] == "BLOCKED"
+
+        first_reactivate = await client.post(
+            f"/api/v1/members/{member_id}/reactivate", headers=librarian_headers
+        )
+        second_reactivate = await client.post(
+            f"/api/v1/members/{member_id}/reactivate", headers=librarian_headers
+        )
+        assert first_reactivate.status_code == second_reactivate.status_code == 200
+        assert second_reactivate.json()["membership_status"] == "ACTIVE"
 
     async def test_suspended_member_cannot_borrow(
         self, client: AsyncClient, librarian_headers: dict[str, str]

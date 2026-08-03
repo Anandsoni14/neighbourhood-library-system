@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from api.deps import get_book_copy_service, get_current_staff
 from api.pagination import Page, PaginationParams, build_page
+from api.responses import CONFLICT, NOT_FOUND, UNAUTHORIZED
 from api.validators import RequestModel
 from core.pagination import SortDir
 from models.enums import CopyCondition, CopyStatus
@@ -15,6 +16,7 @@ router = APIRouter(
     prefix="/api/v1/book-copies",
     tags=["book-copies"],
     dependencies=[Depends(get_current_staff)],
+    responses={**UNAUTHORIZED},
 )
 
 
@@ -55,7 +57,9 @@ class BookCopyResponse(BaseModel):
     late_fee_per_day: Decimal
 
 
-@router.post("", response_model=BookCopyResponse, status_code=201)
+@router.post(
+    "", response_model=BookCopyResponse, status_code=201, responses={**NOT_FOUND, **CONFLICT}
+)
 async def create_book_copy(
     req: BookCopyCreateRequest, service: BookCopyService = Depends(get_book_copy_service)
 ) -> BookCopyResponse:
@@ -96,7 +100,7 @@ async def list_book_copies(
     return build_page(copies, total, pagination, BookCopyResponse)
 
 
-@router.get("/{copy_id}", response_model=BookCopyResponse)
+@router.get("/{copy_id}", response_model=BookCopyResponse, responses={**NOT_FOUND})
 async def get_book_copy(
     copy_id: UUID, service: BookCopyService = Depends(get_book_copy_service)
 ) -> BookCopyResponse:
@@ -105,7 +109,9 @@ async def get_book_copy(
     return BookCopyResponse.model_validate(copy)
 
 
-@router.put("/{copy_id}", response_model=BookCopyResponse)
+@router.put(
+    "/{copy_id}", response_model=BookCopyResponse, responses={**NOT_FOUND, **CONFLICT}
+)
 async def update_book_copy(
     copy_id: UUID,
     req: BookCopyUpdateRequest,
@@ -124,7 +130,7 @@ async def update_book_copy(
     return BookCopyResponse.model_validate(copy)
 
 
-@router.delete("/{copy_id}", status_code=204)
+@router.delete("/{copy_id}", status_code=204, responses={**NOT_FOUND, **CONFLICT})
 async def delete_book_copy(
     copy_id: UUID, service: BookCopyService = Depends(get_book_copy_service)
 ) -> None:

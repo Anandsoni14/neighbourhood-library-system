@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from api.deps import get_current_staff, get_transaction_service
 from api.pagination import Page, PaginationParams, build_page
+from api.responses import CONFLICT, NOT_FOUND, UNAUTHORIZED
 from api.validators import RequestModel
 from core.pagination import SortDir
 from models.enums import PaymentMode, TransactionStatus, TransactionType
@@ -16,6 +17,7 @@ router = APIRouter(
     prefix="/api/v1/transactions",
     tags=["transactions"],
     dependencies=[Depends(get_current_staff)],
+    responses={**UNAUTHORIZED},
 )
 
 
@@ -59,7 +61,12 @@ class TransactionResponse(BaseModel):
     created_at: datetime
 
 
-@router.post("", response_model=TransactionResponse, status_code=201)
+@router.post(
+    "",
+    response_model=TransactionResponse,
+    status_code=201,
+    responses={**NOT_FOUND, **CONFLICT},
+)
 async def create_transaction(
     req: TransactionCreateRequest,
     service: TransactionService = Depends(get_transaction_service),
@@ -100,7 +107,9 @@ async def list_transactions(
     return build_page(transactions, total, pagination, TransactionResponse)
 
 
-@router.get("/{transaction_id}", response_model=TransactionResponse)
+@router.get(
+    "/{transaction_id}", response_model=TransactionResponse, responses={**NOT_FOUND}
+)
 async def get_transaction(
     transaction_id: UUID, service: TransactionService = Depends(get_transaction_service)
 ) -> TransactionResponse:
@@ -109,7 +118,11 @@ async def get_transaction(
     return TransactionResponse.model_validate(transaction)
 
 
-@router.post("/{transaction_id}/pay", response_model=TransactionResponse)
+@router.post(
+    "/{transaction_id}/pay",
+    response_model=TransactionResponse,
+    responses={**NOT_FOUND, **CONFLICT},
+)
 async def pay_transaction(
     transaction_id: UUID,
     req: TransactionPaymentRequest,
@@ -124,7 +137,11 @@ async def pay_transaction(
     return TransactionResponse.model_validate(transaction)
 
 
-@router.post("/{transaction_id}/fail", response_model=TransactionResponse)
+@router.post(
+    "/{transaction_id}/fail",
+    response_model=TransactionResponse,
+    responses={**NOT_FOUND, **CONFLICT},
+)
 async def fail_transaction(
     transaction_id: UUID,
     req: TransactionFailureRequest,
@@ -139,7 +156,11 @@ async def fail_transaction(
     return TransactionResponse.model_validate(transaction)
 
 
-@router.post("/{transaction_id}/waive", response_model=TransactionResponse)
+@router.post(
+    "/{transaction_id}/waive",
+    response_model=TransactionResponse,
+    responses={**NOT_FOUND, **CONFLICT},
+)
 async def waive_transaction(
     transaction_id: UUID, service: TransactionService = Depends(get_transaction_service)
 ) -> TransactionResponse:

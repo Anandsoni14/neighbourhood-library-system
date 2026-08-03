@@ -2,10 +2,15 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ConflictError, NotFoundError
 from core.security import create_access_token, verify_password
 from models.enums import StaffRole, StaffStatus
+from services.book import BookService
+from services.book_copy import BookCopyService
+from services.loan import LoanService
+from services.member import MemberService
 from services.staff import StaffService
 
 # staff_service, admin_headers, and librarian_headers fixtures live in conftest.py.
@@ -102,6 +107,30 @@ class TestStaffService:
 
         assert staff.password_hash == original_hash
         assert verify_password("password123", staff.password_hash)
+
+    async def test_update_staff_duplicate_email_raises_conflict(
+        self, staff_service: StaffService
+    ) -> None:
+        await staff_service.create_staff(
+            employee_code="EMP-202",
+            first_name="Taken",
+            last_name="Email",
+            email="taken.email@library.com",
+            password="password123",
+        )
+        other = await staff_service.create_staff(
+            employee_code="EMP-203",
+            first_name="Other",
+            last_name="Staff",
+            email="other.email@library.com",
+            password="password123",
+        )
+        with pytest.raises(ConflictError):
+            await staff_service.update_staff(other.staff_id, email="taken.email@library.com")
+
+    async def test_update_staff_not_found_raises(self, staff_service: StaffService) -> None:
+        with pytest.raises(NotFoundError):
+            await staff_service.update_staff(uuid4(), first_name="Nobody")
 
     async def test_change_password(self, staff_service: StaffService) -> None:
         staff = await staff_service.create_staff(
@@ -238,6 +267,41 @@ class TestStaffService:
         await staff_service.deactivate_staff(staff.staff_id, acting_staff_id=acting_admin.staff_id)
         reactivated = await staff_service.activate_staff(staff.staff_id)
         assert reactivated.status == StaffStatus.ACTIVE
+
+    async def test_activate_staff_already_active_is_idempotent(
+        self, staff_service: StaffService
+    ) -> None:
+        staff = await staff_service.create_staff(
+            employee_code="EMP-410",
+            first_name="Already",
+            last_name="Active",
+            email="already-active@library.com",
+            password="password123",
+        )
+        reactivated_again = await staff_service.activate_staff(staff.staff_id)
+        assert reactivated_again.status == StaffStatus.ACTIVE
+
+    async def test_delete_staff_with_loan_history_raises_conflict(
+        self, staff_service: StaffService, db: AsyncSession
+    ) -> None:
+        staff = await staff_service.create_staff(
+            employee_code="EMP-501",
+            first_name="Issuer",
+            last_name="Staff",
+            email="issuer.staff@library.com",
+            password="password123",
+        )
+        book = await BookService(db).create_book(title="Staff Delete Book", author="Author")
+        copy = await BookCopyService(db).create_copy(book_id=book.book_id, barcode="STAFF-DEL-1")
+        member = await MemberService(db).create_member(
+            first_name="Has", last_name="Staff Loan", email="has.staff.loan@example.com"
+        )
+        await LoanService(db).issue_loan(
+            copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+        )
+
+        with pytest.raises(ConflictError):
+            await staff_service.delete_staff(staff.staff_id)
 
     async def test_delete_staff(self, staff_service: StaffService) -> None:
         staff = await staff_service.create_staff(
@@ -685,6 +749,68 @@ class TestStaffAPI:
         response = await client.post(
             f"/api/v1/staff/{staff_id}/deactivate", headers=librarian_headers
         )
+        assert response.status_code == 403
+
+    async def test_update_staff_endpoint_librarian_forbidden_403(
+        self, client: AsyncClient, admin_headers: dict[str, str], librarian_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-012",
+                "first_name": "Update",
+                "last_name": "Forbidden",
+                "email": "update.forbidden@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+
+        response = await client.put(
+            f"/api/v1/staff/{staff_id}", json={"first_name": "Changed"}, headers=librarian_headers
+        )
+        assert response.status_code == 403
+
+    async def test_activate_staff_endpoint_librarian_forbidden_403(
+        self, client: AsyncClient, admin_headers: dict[str, str], librarian_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-013",
+                "first_name": "Activate",
+                "last_name": "Forbidden",
+                "email": "activate.forbidden@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+        await client.post(f"/api/v1/staff/{staff_id}/deactivate", headers=admin_headers)
+
+        response = await client.post(
+            f"/api/v1/staff/{staff_id}/activate", headers=librarian_headers
+        )
+        assert response.status_code == 403
+
+    async def test_delete_staff_endpoint_librarian_forbidden_403(
+        self, client: AsyncClient, admin_headers: dict[str, str], librarian_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-014",
+                "first_name": "Delete",
+                "last_name": "Forbidden",
+                "email": "delete.forbidden@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+
+        response = await client.delete(f"/api/v1/staff/{staff_id}", headers=librarian_headers)
         assert response.status_code == 403
 
     async def test_deactivate_staff_endpoint_refuses_self_deactivation(

@@ -76,6 +76,40 @@ class TestAuthService:
         with pytest.raises(AuthenticationException):
             await auth_service.login("carol.auth@library.com", "correctpassword")
 
+    async def test_login_failure_message_is_identical_across_causes(
+        self, staff_service: StaffService, auth_service: AuthService
+    ) -> None:
+        """Deliberate no-enumeration behaviour: wrong password, unknown email,
+        and an inactive account must be indistinguishable to the caller, not
+        just share a status code."""
+        await staff_service.create_staff(
+            employee_code="AUTH-004",
+            first_name="Dana",
+            last_name="Staff",
+            email="dana.auth@library.com",
+            password="correctpassword",
+        )
+        inactive = await staff_service.create_staff(
+            employee_code="AUTH-005",
+            first_name="Erin",
+            last_name="Staff",
+            email="erin.auth@library.com",
+            password="correctpassword",
+        )
+        await staff_service.update_staff(inactive.staff_id, status=StaffStatus.INACTIVE)
+
+        messages = set()
+        for email, password in [
+            ("dana.auth@library.com", "wrongpassword"),
+            ("nobody-at-all@library.com", "whatever123"),
+            ("erin.auth@library.com", "correctpassword"),
+        ]:
+            with pytest.raises(AuthenticationException) as exc_info:
+                await auth_service.login(email, password)
+            messages.add(str(exc_info.value))
+
+        assert len(messages) == 1
+
 
 class TestAuthAPI:
     """Test Auth API endpoints and the get_current_staff/require_role dependencies."""

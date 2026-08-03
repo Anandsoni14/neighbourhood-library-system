@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 
 from api.deps import get_current_staff, get_loan_service
 from api.pagination import Page, PaginationParams, build_page
+from api.responses import CONFLICT, NOT_FOUND, UNAUTHORIZED
 from core.pagination import SortDir
 from models import Staff
 from models.enums import CopyCondition, LoanStatus
@@ -16,6 +17,7 @@ router = APIRouter(
     prefix="/api/v1/loans",
     tags=["loans"],
     dependencies=[Depends(get_current_staff)],
+    responses={**UNAUTHORIZED},
 )
 
 
@@ -63,7 +65,9 @@ class OverdueLoanResponse(LoanResponse):
     estimated_fine: Decimal
 
 
-@router.post("", response_model=LoanResponse, status_code=201)
+@router.post(
+    "", response_model=LoanResponse, status_code=201, responses={**NOT_FOUND, **CONFLICT}
+)
 async def issue_loan(
     req: LoanIssueRequest,
     service: LoanService = Depends(get_loan_service),
@@ -79,7 +83,9 @@ async def issue_loan(
     return LoanResponse.model_validate(loan)
 
 
-@router.post("/{loan_id}/return", response_model=LoanResponse)
+@router.post(
+    "/{loan_id}/return", response_model=LoanResponse, responses={**NOT_FOUND, **CONFLICT}
+)
 async def return_loan(
     loan_id: UUID,
     req: LoanReturnRequest,
@@ -158,7 +164,7 @@ async def list_overdue_loans(
     return Page.create(items, total, pagination)
 
 
-@router.get("/{loan_id}", response_model=LoanResponse)
+@router.get("/{loan_id}", response_model=LoanResponse, responses={**NOT_FOUND})
 async def get_loan(
     loan_id: UUID, service: LoanService = Depends(get_loan_service)
 ) -> LoanResponse:

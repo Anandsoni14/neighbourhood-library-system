@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import (
@@ -232,6 +233,49 @@ class TestTransactionService:
                 transaction_id=transaction.transaction_id, payment_mode=PaymentMode.CARD
             )
 
+    async def test_mark_failed_on_already_settled_raises(
+        self, member_service: MemberService, transaction_service: TransactionService
+    ) -> None:
+        member = await _make_member(member_service)
+        transaction = await transaction_service.create_transaction(
+            member_id=member.member_id,
+            transaction_type=TransactionType.LATE_FEE,
+            amount=Decimal("3.00"),
+        )
+        await transaction_service.mark_failed(
+            transaction_id=transaction.transaction_id, payment_mode=PaymentMode.CASH
+        )
+
+        with pytest.raises(TransactionNotPendingException):
+            await transaction_service.mark_failed(
+                transaction_id=transaction.transaction_id, payment_mode=PaymentMode.CARD
+            )
+
+    async def test_waiver_transaction_payment_mode_blocked_by_db_constraint(
+        self,
+        member_service: MemberService,
+        transaction_service: TransactionService,
+        db: AsyncSession,
+    ) -> None:
+        """No service call path can ever set payment_mode on a WAIVER row —
+        waive_transaction never sets one, and _get_pending blocks pay/fail on
+        a transaction that isn't PENDING (WAIVER is created already WAIVED).
+        This forces the state directly to confirm the DB constraint itself,
+        not just application logic, is what makes it impossible — same
+        defense-in-depth rationale as test_error_mapping.py's forced
+        IntegrityError/DataError tests."""
+        member = await _make_member(member_service)
+        transaction = await transaction_service.create_transaction(
+            member_id=member.member_id,
+            transaction_type=TransactionType.WAIVER,
+            amount=Decimal("3.00"),
+        )
+
+        transaction.payment_mode = PaymentMode.CASH
+        db.add(transaction)
+        with pytest.raises(IntegrityError):
+            await db.flush()
+
     async def test_mark_failed(
         self, member_service: MemberService, transaction_service: TransactionService
     ) -> None:
@@ -401,6 +445,45 @@ class TestTransactionsAPI:
             headers=librarian_headers,
         )
         assert response.status_code == 404
+
+    async def test_create_transaction_endpoint_loan_member_mismatch_409(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        """Service-level mismatch is pinned by
+        test_create_transaction_loan_member_mismatch_raises; this is the same
+        rule at the HTTP layer."""
+        book_resp = await client.post(
+            "/api/v1/books",
+            json={"title": "Mismatch Book", "author": "Author"},
+            headers=librarian_headers,
+        )
+        book_id = book_resp.json()["book_id"]
+        copy_resp = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": f"MISMATCH-{uuid4()}"},
+            headers=librarian_headers,
+        )
+        copy_id = copy_resp.json()["copy_id"]
+        loan_owner_id = await self._make_member_via_api(client, librarian_headers)
+        loan_resp = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": copy_id, "member_id": loan_owner_id},
+            headers=librarian_headers,
+        )
+        loan_id = loan_resp.json()["loan_id"]
+        other_member_id = await self._make_member_via_api(client, librarian_headers)
+
+        response = await client.post(
+            "/api/v1/transactions",
+            json={
+                "member_id": other_member_id,
+                "transaction_type": "LATE_FEE",
+                "amount": "5.00",
+                "loan_id": loan_id,
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 409
 
     async def test_create_transaction_endpoint_negative_amount_422(
         self, client: AsyncClient, librarian_headers: dict[str, str]

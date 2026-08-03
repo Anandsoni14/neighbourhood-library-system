@@ -8,6 +8,9 @@ from core.exceptions import ConflictError, NotFoundError
 from models.enums import CopyStatus
 from services.book import BookService
 from services.book_copy import BookCopyService
+from services.loan import LoanService
+from services.member import MemberService
+from services.staff import StaffService
 
 
 @pytest.fixture
@@ -113,6 +116,32 @@ class TestBookCopyService:
         await book_service.archive_book(book.book_id)
         with pytest.raises(ConflictError):
             await copy_service.create_copy(book_id=book.book_id, barcode="ARCHIVED-1")
+
+    async def test_delete_copy_with_loan_history_raises_conflict(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        staff_service: StaffService,
+        db: AsyncSession,
+    ) -> None:
+        book = await book_service.create_book(title="Loaned Book", author="Author")
+        copy = await copy_service.create_copy(book_id=book.book_id, barcode="LOAN-HIST-1")
+        staff = await staff_service.create_staff(
+            employee_code="COPY-DEL-STAFF",
+            first_name="Loan",
+            last_name="Issuer",
+            email="loan.issuer.copy@library.com",
+            password="password123",
+        )
+        member = await MemberService(db).create_member(
+            first_name="Has", last_name="Loan", email="has.loan.copy@example.com"
+        )
+        await LoanService(db).issue_loan(
+            copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+        )
+
+        with pytest.raises(ConflictError):
+            await copy_service.delete_copy(copy.copy_id)
 
 
 class TestBookCopiesAPI:

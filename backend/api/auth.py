@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
 
 from api.deps import get_auth_service, get_current_staff
+from api.responses import UNAUTHORIZED
 from api.staff import StaffResponse
 from api.validators import LoginPassword
 from models import Staff
@@ -25,7 +26,7 @@ class TokenResponse(BaseModel):
     staff: StaffResponse
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, responses={**UNAUTHORIZED})
 async def login(
     req: LoginRequest, service: AuthService = Depends(get_auth_service)
 ) -> TokenResponse:
@@ -34,7 +35,7 @@ async def login(
     return TokenResponse(access_token=token, staff=StaffResponse.model_validate(staff))
 
 
-@router.get("/me", response_model=StaffResponse)
+@router.get("/me", response_model=StaffResponse, responses={**UNAUTHORIZED})
 async def read_current_staff(current_staff: Staff = Depends(get_current_staff)) -> StaffResponse:
     """Return the authenticated staff member's own record."""
     return StaffResponse.model_validate(current_staff)

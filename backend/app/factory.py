@@ -29,7 +29,21 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings)
 
-    app = FastAPI(title=settings.app_name, lifespan=lifespan)
+    app = FastAPI(
+        title=settings.app_name,
+        description=(
+            "Library Management System API.\n\n"
+            "**Using /docs:** the \"Authorize\" button submits OAuth2 form fields "
+            "(username/password) to the login URL, but `POST /api/v1/auth/login` "
+            "expects a JSON body instead, so Authorize will not work here. Call "
+            "`/api/v1/auth/login` directly via its own \"Try it out\", copy the "
+            "returned `access_token`, and send it as an `Authorization: Bearer "
+            "<token>` header from a REST client (curl, httpie, Postman) — Swagger "
+            "UI has no field for attaching a manually-supplied header to later "
+            "requests."
+        ),
+        lifespan=lifespan,
+    )
     # The browser SPA is served from a different origin than the API, so the
     # allowed origins are configuration rather than a hardcoded localhost list.
     app.add_middleware(

@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import (
@@ -20,6 +21,7 @@ from models.book import BookCopy
 from models.enums import CopyCondition, CopyStatus, LoanStatus, MembershipStatus
 from models.member import Member
 from models.staff import Staff
+from repositories.loan import LoanRepository
 from services.book import BookService
 from services.book_copy import BookCopyService
 from services.loan import LoanService
@@ -248,6 +250,38 @@ class TestLoanService:
                 issued_by_staff_id=staff.staff_id,
             )
 
+    async def test_issue_loan_db_unique_index_fallback_raises_conflict(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The service's own pre-check is a friendly convenience; the partial
+        unique index (one_active_loan_per_copy) is the authoritative guard
+        against a genuine race between two concurrent requests. This forces
+        the pre-check to pass clean and the insert itself to fail, confirming
+        issue_loan's own `except IntegrityError` fallback still produces the
+        same 409 independent of the pre-check — same technique as
+        test_error_mapping.py's forced-IntegrityError test."""
+        copy = await _make_copy(book_service, copy_service)
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+
+        async def _raise_integrity_error(self: LoanRepository, entity: object) -> object:
+            raise IntegrityError("INSERT", {}, Exception("duplicate key value"))
+
+        monkeypatch.setattr(LoanRepository, "add", _raise_integrity_error)
+
+        with pytest.raises(BookUnavailableException):
+            await loan_service.issue_loan(
+                copy_id=copy.copy_id,
+                member_id=member.member_id,
+                issued_by_staff_id=staff.staff_id,
+            )
+
     async def test_return_loan_no_fee(
         self,
         book_service: BookService,
@@ -310,6 +344,65 @@ class TestLoanService:
         )
 
         assert returned.calculated_fine == Decimal("7.50")
+
+    async def test_return_loan_due_a_few_seconds_in_future_no_fee(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+        db: AsyncSession,
+    ) -> None:
+        """Exercises the `as_of <= due_at` boundary itself, not just "far in
+        the future" like test_return_loan_no_fee."""
+        copy = await _make_copy(book_service, copy_service)
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+        loan = await loan_service.issue_loan(
+            copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+        )
+        loan.due_at = datetime.now(UTC) + timedelta(seconds=5)
+        db.add(loan)
+        await db.flush()
+
+        returned = await loan_service.return_loan(
+            loan_id=loan.loan_id,
+            return_condition=CopyCondition.GOOD,
+            received_by_staff_id=staff.staff_id,
+        )
+
+        assert returned.calculated_fine == Decimal("0.00")
+
+    async def test_return_loan_due_one_second_ago_charges_one_full_day(
+        self,
+        book_service: BookService,
+        copy_service: BookCopyService,
+        member_service: MemberService,
+        staff_service: StaffService,
+        loan_service: LoanService,
+        db: AsyncSession,
+    ) -> None:
+        """Any part of a day overdue rounds up to a full day's fee, even a
+        single second — the boundary opposite test_return_loan_no_fee."""
+        copy = await _make_copy(book_service, copy_service, late_fee_per_day=Decimal("5.00"))
+        member = await _make_member(member_service)
+        staff = await _make_staff(staff_service)
+        loan = await loan_service.issue_loan(
+            copy_id=copy.copy_id, member_id=member.member_id, issued_by_staff_id=staff.staff_id
+        )
+        loan.borrowed_at = datetime.now(UTC) - timedelta(days=1)
+        loan.due_at = datetime.now(UTC) - timedelta(seconds=1)
+        db.add(loan)
+        await db.flush()
+
+        returned = await loan_service.return_loan(
+            loan_id=loan.loan_id,
+            return_condition=CopyCondition.GOOD,
+            received_by_staff_id=staff.staff_id,
+        )
+
+        assert returned.calculated_fine == Decimal("5.00")
 
     async def test_return_loan_damaged_sets_maintenance(
         self,

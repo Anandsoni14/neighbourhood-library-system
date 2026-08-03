@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from api.deps import get_book_service, get_current_staff
 from api.pagination import Page, PaginationParams, build_page
+from api.responses import CONFLICT, NOT_FOUND, UNAUTHORIZED, VALIDATION_ERROR
 from api.validators import RequestModel
 from core.exceptions import ValidationError
 from core.pagination import ARCHIVE_FILTER_VALUES, ArchiveFilter, SortDir
@@ -15,6 +16,7 @@ router = APIRouter(
     prefix="/api/v1/books",
     tags=["books"],
     dependencies=[Depends(get_current_staff)],
+    responses={**UNAUTHORIZED},
 )
 
 
@@ -56,7 +58,7 @@ class BookResponse(BaseModel):
     is_archived: bool
 
 
-@router.post("", response_model=BookResponse, status_code=201)
+@router.post("", response_model=BookResponse, status_code=201, responses={**NOT_FOUND, **CONFLICT})
 async def create_book(
     req: BookRequest, service: BookService = Depends(get_book_service)
 ) -> BookResponse:
@@ -104,7 +106,7 @@ async def list_books(
     return build_page(books, total, pagination, BookResponse)
 
 
-@router.get("/search", response_model=Page[BookResponse])
+@router.get("/search", response_model=Page[BookResponse], responses={**VALIDATION_ERROR})
 async def search_books(
     pagination: PaginationParams = Depends(),
     title: str | None = Query(None),
@@ -130,7 +132,7 @@ async def search_books(
     return build_page(books, total, pagination, BookResponse)
 
 
-@router.get("/{book_id}", response_model=BookResponse)
+@router.get("/{book_id}", response_model=BookResponse, responses={**NOT_FOUND})
 async def get_book(
     book_id: UUID, service: BookService = Depends(get_book_service)
 ) -> BookResponse:
@@ -139,7 +141,7 @@ async def get_book(
     return BookResponse.model_validate(book)
 
 
-@router.put("/{book_id}", response_model=BookResponse)
+@router.put("/{book_id}", response_model=BookResponse, responses={**NOT_FOUND, **CONFLICT})
 async def update_book(
     book_id: UUID, req: BookRequest, service: BookService = Depends(get_book_service)
 ) -> BookResponse:
@@ -152,7 +154,7 @@ async def update_book(
 
 # Deliberately no DELETE: a book with copies can't be removed without
 # destroying loan history. Archiving is the reversible equivalent.
-@router.post("/{book_id}/archive", response_model=BookResponse)
+@router.post("/{book_id}/archive", response_model=BookResponse, responses={**NOT_FOUND})
 async def archive_book(
     book_id: UUID, service: BookService = Depends(get_book_service)
 ) -> BookResponse:
@@ -161,7 +163,7 @@ async def archive_book(
     return BookResponse.model_validate(book)
 
 
-@router.post("/{book_id}/unarchive", response_model=BookResponse)
+@router.post("/{book_id}/unarchive", response_model=BookResponse, responses={**NOT_FOUND})
 async def unarchive_book(
     book_id: UUID, service: BookService = Depends(get_book_service)
 ) -> BookResponse:

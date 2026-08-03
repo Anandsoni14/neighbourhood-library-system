@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from api.deps import get_current_staff, get_staff_service, require_role
 from api.pagination import Page, PaginationParams, build_page
+from api.responses import CONFLICT, FORBIDDEN, NOT_FOUND, UNAUTHORIZED
 from api.validators import Password, PhoneNumber, RequestModel
 from core.exceptions import AuthorizationException
 from core.pagination import SortDir
@@ -12,7 +13,7 @@ from models import Staff
 from models.enums import StaffRole, StaffStatus
 from services.staff import StaffService, StaffSortField
 
-router = APIRouter(prefix="/api/v1/staff", tags=["staff"])
+router = APIRouter(prefix="/api/v1/staff", tags=["staff"], responses={**UNAUTHORIZED})
 
 
 class StaffCreateRequest(RequestModel):
@@ -59,7 +60,9 @@ class StaffResponse(BaseModel):
     status: StaffStatus
 
 
-@router.post("", response_model=StaffResponse, status_code=201)
+@router.post(
+    "", response_model=StaffResponse, status_code=201, responses={**FORBIDDEN, **CONFLICT}
+)
 async def create_staff(
     req: StaffCreateRequest,
     service: StaffService = Depends(get_staff_service),
@@ -108,7 +111,7 @@ async def list_staff(
     return build_page(staff, total, pagination, StaffResponse)
 
 
-@router.get("/{staff_id}", response_model=StaffResponse)
+@router.get("/{staff_id}", response_model=StaffResponse, responses={**NOT_FOUND})
 async def get_staff(
     staff_id: UUID,
     service: StaffService = Depends(get_staff_service),
@@ -119,7 +122,11 @@ async def get_staff(
     return StaffResponse.model_validate(staff)
 
 
-@router.put("/{staff_id}", response_model=StaffResponse)
+@router.put(
+    "/{staff_id}",
+    response_model=StaffResponse,
+    responses={**FORBIDDEN, **NOT_FOUND, **CONFLICT},
+)
 async def update_staff(
     staff_id: UUID,
     req: StaffUpdateRequest,
@@ -139,7 +146,11 @@ async def update_staff(
     return StaffResponse.model_validate(staff)
 
 
-@router.post("/{staff_id}/change-password", response_model=StaffResponse)
+@router.post(
+    "/{staff_id}/change-password",
+    response_model=StaffResponse,
+    responses={**FORBIDDEN, **NOT_FOUND},
+)
 async def change_password(
     staff_id: UUID,
     req: ChangePasswordRequest,
@@ -153,7 +164,11 @@ async def change_password(
     return StaffResponse.model_validate(staff)
 
 
-@router.post("/{staff_id}/deactivate", response_model=StaffResponse)
+@router.post(
+    "/{staff_id}/deactivate",
+    response_model=StaffResponse,
+    responses={**FORBIDDEN, **NOT_FOUND, **CONFLICT},
+)
 async def deactivate_staff(
     staff_id: UUID,
     service: StaffService = Depends(get_staff_service),
@@ -164,7 +179,11 @@ async def deactivate_staff(
     return StaffResponse.model_validate(staff)
 
 
-@router.post("/{staff_id}/activate", response_model=StaffResponse)
+@router.post(
+    "/{staff_id}/activate",
+    response_model=StaffResponse,
+    responses={**FORBIDDEN, **NOT_FOUND},
+)
 async def activate_staff(
     staff_id: UUID,
     service: StaffService = Depends(get_staff_service),
@@ -175,7 +194,9 @@ async def activate_staff(
     return StaffResponse.model_validate(staff)
 
 
-@router.delete("/{staff_id}", status_code=204)
+@router.delete(
+    "/{staff_id}", status_code=204, responses={**FORBIDDEN, **NOT_FOUND, **CONFLICT}
+)
 async def delete_staff(
     staff_id: UUID,
     service: StaffService = Depends(get_staff_service),

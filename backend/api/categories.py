@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from api.deps import get_category_service, get_current_staff
 from api.pagination import Page, PaginationParams, build_page
+from api.responses import CONFLICT, NOT_FOUND, UNAUTHORIZED
 from api.validators import RequestModel
 from core.pagination import ARCHIVE_FILTER_VALUES, ArchiveFilter, SortDir
 from services.category import CategoryService, CategorySortField, CategoryUpdateFields
@@ -14,6 +15,7 @@ router = APIRouter(
     prefix="/api/v1/categories",
     tags=["categories"],
     dependencies=[Depends(get_current_staff)],
+    responses={**UNAUTHORIZED},
 )
 
 
@@ -51,7 +53,7 @@ class CategoryResponse(BaseModel):
     is_archived: bool
 
 
-@router.post("", response_model=CategoryResponse, status_code=201)
+@router.post("", response_model=CategoryResponse, status_code=201, responses={**CONFLICT})
 async def create_category(
     req: CategoryCreateRequest, service: CategoryService = Depends(get_category_service)
 ) -> CategoryResponse:
@@ -81,7 +83,7 @@ async def list_categories(
     return build_page(categories, total, pagination, CategoryResponse)
 
 
-@router.get("/{category_id}", response_model=CategoryResponse)
+@router.get("/{category_id}", response_model=CategoryResponse, responses={**NOT_FOUND})
 async def get_category(
     category_id: UUID, service: CategoryService = Depends(get_category_service)
 ) -> CategoryResponse:
@@ -90,7 +92,9 @@ async def get_category(
     return CategoryResponse.model_validate(category)
 
 
-@router.put("/{category_id}", response_model=CategoryResponse)
+@router.put(
+    "/{category_id}", response_model=CategoryResponse, responses={**NOT_FOUND, **CONFLICT}
+)
 async def update_category(
     category_id: UUID,
     req: CategoryUpdateRequest,
@@ -107,7 +111,7 @@ async def update_category(
 
 # Deliberately no DELETE: book.category_id is ondelete=RESTRICT, so deleting
 # a used category always 409s. Archiving is the reversible equivalent.
-@router.post("/{category_id}/archive", response_model=CategoryResponse)
+@router.post("/{category_id}/archive", response_model=CategoryResponse, responses={**NOT_FOUND})
 async def archive_category(
     category_id: UUID, service: CategoryService = Depends(get_category_service)
 ) -> CategoryResponse:
@@ -116,7 +120,9 @@ async def archive_category(
     return CategoryResponse.model_validate(category)
 
 
-@router.post("/{category_id}/unarchive", response_model=CategoryResponse)
+@router.post(
+    "/{category_id}/unarchive", response_model=CategoryResponse, responses={**NOT_FOUND}
+)
 async def unarchive_category(
     category_id: UUID, service: CategoryService = Depends(get_category_service)
 ) -> CategoryResponse:

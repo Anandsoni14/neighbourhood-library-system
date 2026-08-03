@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from api.deps import get_current_staff, get_member_service
 from api.pagination import Page, PaginationParams, build_page
+from api.responses import CONFLICT, NOT_FOUND, UNAUTHORIZED
 from api.validators import PhoneNumber, PostalCode, RequestModel
 from core.pagination import SortDir
 from models.enums import MembershipStatus
@@ -14,6 +15,7 @@ router = APIRouter(
     prefix="/api/v1/members",
     tags=["members"],
     dependencies=[Depends(get_current_staff)],
+    responses={**UNAUTHORIZED},
 )
 
 
@@ -73,7 +75,7 @@ class MemberResponse(BaseModel):
     remarks: str | None
 
 
-@router.post("", response_model=MemberResponse, status_code=201)
+@router.post("", response_model=MemberResponse, status_code=201, responses={**CONFLICT})
 async def create_member(
     req: MemberCreateRequest, service: MemberService = Depends(get_member_service)
 ) -> MemberResponse:
@@ -132,7 +134,7 @@ async def search_members(
     return build_page(members, total, pagination, MemberResponse)
 
 
-@router.get("/{member_id}", response_model=MemberResponse)
+@router.get("/{member_id}", response_model=MemberResponse, responses={**NOT_FOUND})
 async def get_member(
     member_id: UUID, service: MemberService = Depends(get_member_service)
 ) -> MemberResponse:
@@ -141,7 +143,9 @@ async def get_member(
     return MemberResponse.model_validate(member)
 
 
-@router.put("/{member_id}", response_model=MemberResponse)
+@router.put(
+    "/{member_id}", response_model=MemberResponse, responses={**NOT_FOUND, **CONFLICT}
+)
 async def update_member(
     member_id: UUID,
     req: MemberUpdateRequest,
@@ -167,7 +171,7 @@ async def update_member(
     return MemberResponse.model_validate(member)
 
 
-@router.post("/{member_id}/suspend", response_model=MemberResponse)
+@router.post("/{member_id}/suspend", response_model=MemberResponse, responses={**NOT_FOUND})
 async def suspend_member(
     member_id: UUID, service: MemberService = Depends(get_member_service)
 ) -> MemberResponse:
@@ -176,7 +180,9 @@ async def suspend_member(
     return MemberResponse.model_validate(member)
 
 
-@router.post("/{member_id}/reactivate", response_model=MemberResponse)
+@router.post(
+    "/{member_id}/reactivate", response_model=MemberResponse, responses={**NOT_FOUND}
+)
 async def reactivate_member(
     member_id: UUID, service: MemberService = Depends(get_member_service)
 ) -> MemberResponse:
@@ -185,7 +191,7 @@ async def reactivate_member(
     return MemberResponse.model_validate(member)
 
 
-@router.delete("/{member_id}", status_code=204)
+@router.delete("/{member_id}", status_code=204, responses={**NOT_FOUND, **CONFLICT})
 async def delete_member(
     member_id: UUID, service: MemberService = Depends(get_member_service)
 ) -> None:

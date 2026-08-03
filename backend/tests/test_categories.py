@@ -159,6 +159,16 @@ class TestCategoriesAPI:
         response = await client.get(f"/api/v1/categories/{uuid4()}", headers=librarian_headers)
         assert response.status_code == 404
 
+    async def test_list_categories_endpoint_rejects_unknown_sort_field(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        """sort_by is an allowlist, so an arbitrary column name never reaches
+        SQL — parity with test_books.py's equivalent for CategorySortField."""
+        response = await client.get(
+            "/api/v1/categories", params={"sort_by": "is_archived"}, headers=librarian_headers
+        )
+        assert response.status_code == 422
+
     async def test_list_categories_endpoint_excludes_archived_by_default(
         self, client: AsyncClient, librarian_headers: dict[str, str]
     ) -> None:

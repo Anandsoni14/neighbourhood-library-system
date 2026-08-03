@@ -149,6 +149,26 @@ class TestBookService:
         with pytest.raises(NotFoundError):
             await book_service.update_book(book.book_id, {"category_id": uuid4()})
 
+    async def test_update_book_duplicate_isbn_raises_conflict(
+        self, book_service: BookService
+    ) -> None:
+        """Create-time uniqueness is pinned by
+        test_create_book_duplicate_isbn_raises_conflict; this is the same
+        rule on update, which create-time coverage doesn't exercise."""
+        await book_service.create_book(title="Book A", author="Author A", isbn="UPD-ISBN-001")
+        book_b = await book_service.create_book(title="Book B", author="Author B")
+        with pytest.raises(ConflictError):
+            await book_service.update_book(book_b.book_id, {"isbn": "UPD-ISBN-001"})
+
+    async def test_update_book_archived_category_raises_conflict(
+        self, book_service: BookService, category_service: CategoryService
+    ) -> None:
+        category = await category_service.create_category(name="Archived Update Category")
+        await category_service.archive_category(category.category_id)
+        book = await book_service.create_book(title="Recategorize Archived", author="Author")
+        with pytest.raises(ConflictError):
+            await book_service.update_book(book.book_id, {"category_id": category.category_id})
+
     async def test_search_books_by_title(self, book_service: BookService) -> None:
         """Test searching books by title."""
         await book_service.create_book(title="Python Basics", author="Author A")
