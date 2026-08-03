@@ -8,10 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import ConflictError, NotFoundError
-from core.pagination import SortDir
+from core.pagination import SortDir, name_ilike_filter
 from models import Member
 from models.enums import MembershipStatus
 from repositories.member import MemberRepository
+from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,6 @@ class MemberService:
 
     def __init__(self, session: AsyncSession) -> None:
         self.repository = MemberRepository(session)
-        self._session = session
 
     async def create_member(
         self,
@@ -39,19 +39,25 @@ class MemberService:
         remarks: str | None = None,
     ) -> Member:
         """Create a new member. Email and government ID combo must be unique."""
-        existing = await self.repository.get_by_email(email)
-        if existing:
-            raise ConflictError(f"Member with email {email} already exists")
+        await ensure_unique(
+            lambda: self.repository.get_by_email(email),
+            id_attr="member_id",
+            current_id=None,
+            message=f"Member with email {email} already exists",
+        )
 
         if government_id_type and government_id_number:
-            existing_gov_id = await self.repository.get_by_government_id(
-                government_id_type, government_id_number
-            )
-            if existing_gov_id:
-                raise ConflictError(
+            await ensure_unique(
+                lambda: self.repository.get_by_government_id(
+                    government_id_type, government_id_number
+                ),
+                id_attr="member_id",
+                current_id=None,
+                message=(
                     f"Member with government ID {government_id_type}:"
                     f"{government_id_number} already exists"
-                )
+                ),
+            )
 
         member = Member(
             first_name=first_name,
@@ -98,8 +104,7 @@ class MemberService:
         if status is not None:
             filters.append(Member.membership_status == status)
         if name:
-            pattern = f"%{name}%"
-            filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
+            filters.append(name_ilike_filter(name, Member.first_name, Member.last_name))
         if email:
             filters.append(Member.email.ilike(f"%{email}%"))
         if phone_number:
@@ -119,9 +124,12 @@ class MemberService:
         member = await self.get_member(member_id)
 
         if "email" in fields and fields["email"] and fields["email"] != member.email:
-            existing = await self.repository.get_by_email(fields["email"])
-            if existing and existing.member_id != member_id:
-                raise ConflictError(f"Email {fields['email']} is already in use")
+            await ensure_unique(
+                lambda: self.repository.get_by_email(fields["email"]),
+                id_attr="member_id",
+                current_id=member_id,
+                message=f"Email {fields['email']} is already in use",
+            )
 
         new_gov_type = fields.get("government_id_type", member.government_id_type)
         new_gov_number = fields.get("government_id_number", member.government_id_number)
@@ -130,20 +138,15 @@ class MemberService:
             or new_gov_number != member.government_id_number
         )
         if gov_id_changed and new_gov_type and new_gov_number:
-            existing_gov_id = await self.repository.get_by_government_id(
-                new_gov_type, new_gov_number
+            await ensure_unique(
+                lambda: self.repository.get_by_government_id(new_gov_type, new_gov_number),
+                id_attr="member_id",
+                current_id=member_id,
+                message=f"Government ID {new_gov_type}:{new_gov_number} is already in use",
             )
-            if existing_gov_id and existing_gov_id.member_id != member_id:
-                raise ConflictError(
-                    f"Government ID {new_gov_type}:{new_gov_number} is already in use"
-                )
 
-        for key, value in fields.items():
-            if value is not None and hasattr(member, key):
-                setattr(member, key, value)
-
-        self._session.add(member)
-        await self._session.flush()
+        self.repository.assign(member, fields, skip_none=True)
+        await self.repository.save(member)
         logger.info("member_updated", extra={"member_id": str(member_id)})
         return member
 
@@ -151,8 +154,7 @@ class MemberService:
         """Suspend a member (-> BLOCKED), blocking new loans. Idempotent."""
         member = await self.get_member(member_id)
         member.membership_status = MembershipStatus.BLOCKED
-        self._session.add(member)
-        await self._session.flush()
+        await self.repository.save(member)
         logger.info("member_suspended", extra={"member_id": str(member_id)})
         return member
 
@@ -160,17 +162,15 @@ class MemberService:
         """Reactivate a member (-> ACTIVE) from BLOCKED or INACTIVE. Idempotent."""
         member = await self.get_member(member_id)
         member.membership_status = MembershipStatus.ACTIVE
-        self._session.add(member)
-        await self._session.flush()
+        await self.repository.save(member)
         logger.info("member_reactivated", extra={"member_id": str(member_id)})
         return member
 
     async def delete_member(self, member_id: UUID) -> None:
         """Delete a member. Fails if the member has loan or transaction history."""
         member = await self.get_member(member_id)
-        await self.repository.delete(member)
         try:
-            await self._session.flush()
+            await self.repository.delete(member)
         except IntegrityError as e:
             raise ConflictError(
                 f"Cannot delete member {member_id}: it has associated loan or transaction records"

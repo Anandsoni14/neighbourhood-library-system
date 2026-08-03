@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from fastapi import Query
@@ -25,3 +26,11 @@ class Page[ItemT](BaseModel):
     @classmethod
     def create(cls, items: list[ItemT], total: int, pagination: PaginationParams) -> "Page[ItemT]":
         return cls(items=items, total=total, skip=pagination.skip, limit=pagination.limit)
+
+
+def build_page[ItemT: BaseModel, ModelT](
+    rows: Sequence[ModelT], total: int, pagination: PaginationParams, response_cls: type[ItemT]
+) -> Page[ItemT]:
+    """The `[X.model_validate(r) for r in rows]` + Page.create(...) pair every
+    list endpoint repeats."""
+    return Page.create([response_cls.model_validate(r) for r in rows], total, pagination)

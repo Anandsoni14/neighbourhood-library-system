@@ -6,10 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
-from api.pagination import Page, PaginationParams
+from api.pagination import Page, PaginationParams, build_page
 from api.validators import RequestModel
 from core.exceptions import ValidationError
-from core.pagination import SortDir
+from core.pagination import ARCHIVE_FILTER_VALUES, ArchiveFilter, SortDir
 from db.session import get_db
 from models import Book, Category
 from services.book import BookService
@@ -38,21 +38,6 @@ _SORT_COLUMNS = {
     BookSortField.CATEGORY: Category.name,
     BookSortField.PUBLISHED_YEAR: Book.published_year,
     BookSortField.CREATED_AT: Book.created_at,
-}
-
-
-class BookArchiveFilter(StrEnum):
-    """Tri-state so "archived only" is expressible, not just "active plus archived"."""
-
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-    ALL = "all"
-
-
-_ARCHIVE_FILTERS: dict[BookArchiveFilter, bool | None] = {
-    BookArchiveFilter.ACTIVE: False,
-    BookArchiveFilter.ARCHIVED: True,
-    BookArchiveFilter.ALL: None,
 }
 
 
@@ -117,7 +102,7 @@ async def list_books(
     author: str | None = Query(None, description="Case-insensitive substring match."),
     category_id: UUID | None = Query(None),
     isbn: str | None = Query(None, description="Case-insensitive substring match."),
-    archived: BookArchiveFilter = Query(BookArchiveFilter.ACTIVE),
+    archived: ArchiveFilter = Query(ArchiveFilter.ACTIVE),
     in_stock: bool | None = Query(
         None, description="True for books with at least one AVAILABLE copy, False for none."
     ),
@@ -132,14 +117,14 @@ async def list_books(
         author=author,
         category_id=category_id,
         isbn=isbn,
-        is_archived=_ARCHIVE_FILTERS[archived],
+        is_archived=ARCHIVE_FILTER_VALUES[archived],
         in_stock=in_stock,
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([BookResponse.model_validate(b) for b in books], total, pagination)
+    return build_page(books, total, pagination, BookResponse)
 
 
 @router.get("/search", response_model=Page[BookResponse])
@@ -147,7 +132,7 @@ async def search_books(
     pagination: PaginationParams = Depends(),
     title: str | None = Query(None),
     isbn: str | None = Query(None),
-    archived: BookArchiveFilter = Query(BookArchiveFilter.ACTIVE),
+    archived: ArchiveFilter = Query(ArchiveFilter.ACTIVE),
     sort_by: BookSortField = Query(BookSortField.TITLE),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
@@ -160,13 +145,13 @@ async def search_books(
     books, total = await service.list_books(
         title=title,
         isbn=isbn,
-        is_archived=_ARCHIVE_FILTERS[archived],
+        is_archived=ARCHIVE_FILTER_VALUES[archived],
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([BookResponse.model_validate(b) for b in books], total, pagination)
+    return build_page(books, total, pagination, BookResponse)
 
 
 @router.get("/{book_id}", response_model=BookResponse)

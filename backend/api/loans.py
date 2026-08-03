@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
-from api.pagination import Page, PaginationParams
+from api.pagination import Page, PaginationParams, build_page
 from core.pagination import SortDir
 from db.session import get_db
 from models import Loan, Staff
@@ -147,7 +147,7 @@ async def list_loans(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([LoanResponse.model_validate(loan) for loan in loans], total, pagination)
+    return build_page(loans, total, pagination, LoanResponse)
 
 
 @router.get("/overdue", response_model=Page[OverdueLoanResponse])

@@ -14,6 +14,7 @@ from models import BookCopy
 from models.enums import CopyCondition, CopyStatus
 from repositories.book import BookRepository
 from repositories.book_copy import BookCopyRepository
+from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,6 @@ class BookCopyService:
     def __init__(self, session: AsyncSession) -> None:
         self.repository = BookCopyRepository(session)
         self._book_repository = BookRepository(session)
-        self._session = session
 
     async def create_copy(
         self,
@@ -43,9 +43,12 @@ class BookCopyService:
         if book.is_archived:
             raise ConflictError(f"Book {book_id} is archived and cannot receive new copies")
 
-        existing = await self.repository.get_by_barcode(barcode)
-        if existing:
-            raise ConflictError(f"Book copy with barcode {barcode} already exists")
+        await ensure_unique(
+            lambda: self.repository.get_by_barcode(barcode),
+            id_attr="copy_id",
+            current_id=None,
+            message=f"Book copy with barcode {barcode} already exists",
+        )
 
         copy_kwargs: dict[str, Any] = {"book_id": book_id, "barcode": barcode}
         if shelf_code is not None:
@@ -109,25 +112,23 @@ class BookCopyService:
         copy = await self.get_copy(copy_id)
 
         if "barcode" in fields and fields["barcode"] and fields["barcode"] != copy.barcode:
-            existing = await self.repository.get_by_barcode(fields["barcode"])
-            if existing and existing.copy_id != copy_id:
-                raise ConflictError(f"Barcode {fields['barcode']} is already in use")
+            await ensure_unique(
+                lambda: self.repository.get_by_barcode(fields["barcode"]),
+                id_attr="copy_id",
+                current_id=copy_id,
+                message=f"Barcode {fields['barcode']} is already in use",
+            )
 
-        for key, value in fields.items():
-            if value is not None and hasattr(copy, key):
-                setattr(copy, key, value)
-
-        self._session.add(copy)
-        await self._session.flush()
+        self.repository.assign(copy, fields, skip_none=True)
+        await self.repository.save(copy)
         logger.info("book_copy_updated", extra={"copy_id": str(copy_id)})
         return copy
 
     async def delete_copy(self, copy_id: UUID) -> None:
         """Delete a book copy. Fails if the copy has associated loan history."""
         copy = await self.get_copy(copy_id)
-        await self.repository.delete(copy)
         try:
-            await self._session.flush()
+            await self.repository.delete(copy)
         except IntegrityError as e:
             raise ConflictError(
                 f"Cannot delete book copy {copy_id}: it has associated loan records"

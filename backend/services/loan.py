@@ -17,7 +17,7 @@ from core.exceptions import (
     MemberNotEligibleException,
     NotFoundError,
 )
-from core.pagination import SortDir
+from core.pagination import SortDir, name_ilike_filter
 from models import Book, BookCopy, Loan, Member
 from models.enums import CopyCondition, CopyStatus, LoanStatus, MembershipStatus
 from repositories.book import BookRepository
@@ -46,7 +46,6 @@ class LoanService:
         self._book_repository = BookRepository(session)
         self._member_repository = MemberRepository(session)
         self._staff_repository = StaffRepository(session)
-        self._session = session
 
     async def issue_loan(
         self,
@@ -102,7 +101,7 @@ class LoanService:
             remarks=remarks,
         )
         copy.status = CopyStatus.BORROWED
-        self._session.add(copy)
+        await self._copy_repository.save(copy)
 
         try:
             created = await self.repository.add(loan)
@@ -160,9 +159,8 @@ class LoanService:
             else CopyStatus.AVAILABLE
         )
 
-        self._session.add(loan)
-        self._session.add(copy)
-        await self._session.flush()
+        await self.repository.save(loan)
+        await self._copy_repository.save(copy)
 
         logger.info(
             "loan_returned",
@@ -194,6 +192,32 @@ class LoanService:
             raise LoanNotFoundException(f"Loan {loan_id} not found")
         return loan
 
+    @staticmethod
+    def _member_and_book_filters(
+        *,
+        member_name: str | None,
+        book_title: str | None,
+        copy_barcode: str | None = None,
+    ) -> tuple[list[ColumnElement[bool]], list[InstrumentedAttribute[Any]]]:
+        """The member-name/book-title/copy-barcode filter+join logic shared by
+        list_loans and get_overdue_loans (which doesn't take copy_barcode)."""
+        filters: list[ColumnElement[bool]] = []
+        if member_name:
+            filters.append(name_ilike_filter(member_name, Member.first_name, Member.last_name))
+        if book_title:
+            filters.append(Book.title.ilike(f"%{book_title}%"))
+        if copy_barcode:
+            filters.append(BookCopy.barcode.ilike(f"%{copy_barcode}%"))
+
+        joins: list[InstrumentedAttribute[Any]] = []
+        if book_title or copy_barcode:
+            joins.append(Loan.copy)
+        if book_title:
+            joins.append(BookCopy.book)
+        if member_name:
+            joins.append(Loan.member)
+        return filters, joins
+
     async def list_loans(
         self,
         *,
@@ -213,31 +237,17 @@ class LoanService:
         out via Member and BookCopy, so the desk can search by name, not ID.
         """
         filters: list[ColumnElement[bool]] = []
-        needs_copy_join = bool(book_title or copy_barcode)
-        needs_book_join = bool(book_title)
-        needs_member_join = bool(member_name)
-
         if member_id is not None:
             filters.append(Loan.member_id == member_id)
         if copy_id is not None:
             filters.append(Loan.copy_id == copy_id)
         if status is not None:
             filters.append(Loan.status == status)
-        if member_name:
-            pattern = f"%{member_name}%"
-            filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
-        if book_title:
-            filters.append(Book.title.ilike(f"%{book_title}%"))
-        if copy_barcode:
-            filters.append(BookCopy.barcode.ilike(f"%{copy_barcode}%"))
 
-        joins: list[InstrumentedAttribute[Any]] = []
-        if needs_copy_join:
-            joins.append(Loan.copy)
-        if needs_book_join:
-            joins.append(BookCopy.book)
-        if needs_member_join:
-            joins.append(Loan.member)
+        extra_filters, joins = self._member_and_book_filters(
+            member_name=member_name, book_title=book_title, copy_barcode=copy_barcode
+        )
+        filters.extend(extra_filters)
 
         loans, total = await self.repository.list_paginated(
             filters=filters,
@@ -265,23 +275,11 @@ class LoanService:
         row and the relationship is lazy="raise"."""
         as_of = as_of or datetime.now(UTC)
         filters: list[ColumnElement[bool]] = [Loan.status == LoanStatus.ACTIVE, Loan.due_at < as_of]
-        needs_copy_join = bool(book_title)
-        needs_book_join = bool(book_title)
-        needs_member_join = bool(member_name)
 
-        if member_name:
-            pattern = f"%{member_name}%"
-            filters.append(Member.first_name.ilike(pattern) | Member.last_name.ilike(pattern))
-        if book_title:
-            filters.append(Book.title.ilike(f"%{book_title}%"))
-
-        joins: list[InstrumentedAttribute[Any]] = []
-        if needs_copy_join:
-            joins.append(Loan.copy)
-        if needs_book_join:
-            joins.append(BookCopy.book)
-        if needs_member_join:
-            joins.append(Loan.member)
+        extra_filters, joins = self._member_and_book_filters(
+            member_name=member_name, book_title=book_title
+        )
+        filters.extend(extra_filters)
 
         loans, total = await self.repository.list_paginated(
             filters=filters,

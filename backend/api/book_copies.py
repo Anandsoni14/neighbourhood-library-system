@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
-from api.pagination import Page, PaginationParams
+from api.pagination import Page, PaginationParams, build_page
 from api.validators import RequestModel
 from core.pagination import SortDir
 from db.session import get_db
@@ -118,7 +118,7 @@ async def list_book_copies(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([BookCopyResponse.model_validate(c) for c in copies], total, pagination)
+    return build_page(copies, total, pagination, BookCopyResponse)
 
 
 @router.get("/{copy_id}", response_model=BookCopyResponse)

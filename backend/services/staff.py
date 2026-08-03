@@ -8,11 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import ConflictError, NotFoundError
-from core.pagination import SortDir
+from core.pagination import SortDir, name_ilike_filter
 from core.security import hash_password
 from models import Staff
 from models.enums import StaffRole, StaffStatus
 from repositories.staff import StaffRepository
+from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,6 @@ class StaffService:
 
     def __init__(self, session: AsyncSession) -> None:
         self.repository = StaffRepository(session)
-        self._session = session
 
     async def create_staff(
         self,
@@ -39,11 +39,18 @@ class StaffService:
         role: StaffRole | None = None,
     ) -> Staff:
         """Create a new staff member. Employee code and email must be unique."""
-        if await self.repository.get_by_employee_code(employee_code):
-            raise ConflictError(f"Staff with employee code {employee_code} already exists")
-
-        if await self.repository.get_by_email(email):
-            raise ConflictError(f"Staff with email {email} already exists")
+        await ensure_unique(
+            lambda: self.repository.get_by_employee_code(employee_code),
+            id_attr="staff_id",
+            current_id=None,
+            message=f"Staff with employee code {employee_code} already exists",
+        )
+        await ensure_unique(
+            lambda: self.repository.get_by_email(email),
+            id_attr="staff_id",
+            current_id=None,
+            message=f"Staff with email {email} already exists",
+        )
 
         staff_kwargs: dict[str, Any] = {
             "employee_code": employee_code,
@@ -92,8 +99,7 @@ class StaffService:
         if status is not None:
             filters.append(Staff.status == status)
         if name:
-            pattern = f"%{name}%"
-            filters.append(Staff.first_name.ilike(pattern) | Staff.last_name.ilike(pattern))
+            filters.append(name_ilike_filter(name, Staff.first_name, Staff.last_name))
         if employee_code:
             filters.append(Staff.employee_code.ilike(f"%{employee_code}%"))
         if email:
@@ -125,21 +131,23 @@ class StaffService:
             and fields["employee_code"]
             and fields["employee_code"] != staff.employee_code
         ):
-            existing = await self.repository.get_by_employee_code(fields["employee_code"])
-            if existing and existing.staff_id != staff_id:
-                raise ConflictError(f"Employee code {fields['employee_code']} is already in use")
+            await ensure_unique(
+                lambda: self.repository.get_by_employee_code(fields["employee_code"]),
+                id_attr="staff_id",
+                current_id=staff_id,
+                message=f"Employee code {fields['employee_code']} is already in use",
+            )
 
         if "email" in fields and fields["email"] and fields["email"] != staff.email:
-            existing = await self.repository.get_by_email(fields["email"])
-            if existing and existing.staff_id != staff_id:
-                raise ConflictError(f"Email {fields['email']} is already in use")
+            await ensure_unique(
+                lambda: self.repository.get_by_email(fields["email"]),
+                id_attr="staff_id",
+                current_id=staff_id,
+                message=f"Email {fields['email']} is already in use",
+            )
 
-        for key, value in fields.items():
-            if value is not None and hasattr(staff, key):
-                setattr(staff, key, value)
-
-        self._session.add(staff)
-        await self._session.flush()
+        self.repository.assign(staff, fields, skip_none=True)
+        await self.repository.save(staff)
         logger.info("staff_updated", extra={"staff_id": str(staff_id)})
         return staff
 
@@ -147,8 +155,7 @@ class StaffService:
         """Change a staff member's password, re-hashing it."""
         staff = await self.get_staff(staff_id)
         staff.password_hash = hash_password(new_password)
-        self._session.add(staff)
-        await self._session.flush()
+        await self.repository.save(staff)
         logger.info("staff_password_changed", extra={"staff_id": str(staff_id)})
         return staff
 
@@ -172,8 +179,7 @@ class StaffService:
         if staff.status == StaffStatus.INACTIVE:
             return staff
         staff.status = StaffStatus.INACTIVE
-        self._session.add(staff)
-        await self._session.flush()
+        await self.repository.save(staff)
         logger.info("staff_deactivated", extra={"staff_id": str(staff_id)})
         return staff
 
@@ -183,17 +189,15 @@ class StaffService:
         if staff.status == StaffStatus.ACTIVE:
             return staff
         staff.status = StaffStatus.ACTIVE
-        self._session.add(staff)
-        await self._session.flush()
+        await self.repository.save(staff)
         logger.info("staff_activated", extra={"staff_id": str(staff_id)})
         return staff
 
     async def delete_staff(self, staff_id: UUID) -> None:
         """Delete a staff member. Fails if the staff has associated loan records."""
         staff = await self.get_staff(staff_id)
-        await self.repository.delete(staff)
         try:
-            await self._session.flush()
+            await self.repository.delete(staff)
         except IntegrityError as e:
             raise ConflictError(
                 f"Cannot delete staff {staff_id}: it has associated loan records"

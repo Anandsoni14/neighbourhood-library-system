@@ -1,4 +1,3 @@
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import BaseRepository
@@ -13,5 +12,4 @@ class CategoryRepository(BaseRepository[Category]):
 
     async def get_by_name(self, name: str) -> Category | None:
         """Fetch a category by exact name. Case-sensitive, matching the unique constraint."""
-        result = await self._session.execute(select(Category).where(Category.name == name))
-        return result.scalar_one_or_none()
+        return await self.get_by(Category.name, name)

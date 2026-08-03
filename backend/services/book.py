@@ -12,6 +12,7 @@ from models import Book, BookCopy
 from models.enums import CopyStatus
 from repositories.book import BookRepository
 from repositories.category import CategoryRepository
+from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,12 @@ class BookService:
     ) -> Book:
         """Create a new book. ISBN must be unique if provided."""
         if isbn:
-            existing = await self.repository.search_by_isbn(isbn)
-            if existing:
-                raise ConflictError(f"Book with ISBN {isbn} already exists")
+            await ensure_unique(
+                lambda: self.repository.search_by_isbn(isbn),
+                id_attr="book_id",
+                current_id=None,
+                message=f"Book with ISBN {isbn} already exists",
+            )
 
         await self._validate_category(category_id)
 
@@ -129,19 +133,18 @@ class BookService:
         book = await self.get_book(book_id)
 
         if "isbn" in fields and fields["isbn"] and fields["isbn"] != book.isbn:
-            existing = await self.repository.search_by_isbn(fields["isbn"])
-            if existing and existing.book_id != book_id:
-                raise ConflictError(f"ISBN {fields['isbn']} is already in use")
+            await ensure_unique(
+                lambda: self.repository.search_by_isbn(fields["isbn"]),
+                id_attr="book_id",
+                current_id=book_id,
+                message=f"ISBN {fields['isbn']} is already in use",
+            )
 
         if "category_id" in fields:
             await self._validate_category(fields["category_id"])
 
-        for key, value in fields.items():
-            if hasattr(book, key):
-                setattr(book, key, value)
-
-        self._session.add(book)
-        await self._session.flush()
+        self.repository.assign(book, fields, skip_none=False)
+        await self.repository.save(book)
         if "category_id" in fields:
             # Refresh: `book.category` was loaded for the *old* category_id.
             await self._session.refresh(book, attribute_names=["category"])
@@ -158,8 +161,7 @@ class BookService:
         """
         book = await self.get_book(book_id)
         book.is_archived = True
-        self._session.add(book)
-        await self._session.flush()
+        await self.repository.save(book)
         logger.info("book_archived", extra={"book_id": str(book_id)})
         return book
 
@@ -167,7 +169,6 @@ class BookService:
         """Restore an archived book. Idempotent, same rationale as archive."""
         book = await self.get_book(book_id)
         book.is_archived = False
-        self._session.add(book)
-        await self._session.flush()
+        await self.repository.save(book)
         logger.info("book_unarchived", extra={"book_id": str(book_id)})
         return book

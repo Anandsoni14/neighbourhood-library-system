@@ -6,10 +6,11 @@ from sqlalchemy import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute
 
-from core.exceptions import ConflictError, NotFoundError
+from core.exceptions import NotFoundError
 from core.pagination import SortDir
 from models import Category
 from repositories.category import CategoryRepository
+from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +20,15 @@ class CategoryService:
 
     def __init__(self, session: AsyncSession) -> None:
         self.repository = CategoryRepository(session)
-        self._session = session
 
     async def create_category(self, name: str, description: str | None = None) -> Category:
         """Create a new category. Name must be unique."""
-        existing = await self.repository.get_by_name(name)
-        if existing:
-            raise ConflictError(f"Category '{name}' already exists")
+        await ensure_unique(
+            lambda: self.repository.get_by_name(name),
+            id_attr="category_id",
+            current_id=None,
+            message=f"Category '{name}' already exists",
+        )
 
         category = Category(name=name, description=description)
         created = await self.repository.add(category)
@@ -74,16 +77,15 @@ class CategoryService:
         category = await self.get_category(category_id)
 
         if "name" in fields and fields["name"] and fields["name"] != category.name:
-            existing = await self.repository.get_by_name(fields["name"])
-            if existing and existing.category_id != category_id:
-                raise ConflictError(f"Category '{fields['name']}' already exists")
+            await ensure_unique(
+                lambda: self.repository.get_by_name(fields["name"]),
+                id_attr="category_id",
+                current_id=category_id,
+                message=f"Category '{fields['name']}' already exists",
+            )
 
-        for key, value in fields.items():
-            if hasattr(category, key):
-                setattr(category, key, value)
-
-        self._session.add(category)
-        await self._session.flush()
+        self.repository.assign(category, fields, skip_none=False)
+        await self.repository.save(category)
         logger.info("category_updated", extra={"category_id": str(category_id)})
         return category
 
@@ -91,8 +93,7 @@ class CategoryService:
         """Archive a category, hiding it from listings and the book form. Idempotent."""
         category = await self.get_category(category_id)
         category.is_archived = True
-        self._session.add(category)
-        await self._session.flush()
+        await self.repository.save(category)
         logger.info("category_archived", extra={"category_id": str(category_id)})
         return category
 
@@ -100,7 +101,6 @@ class CategoryService:
         """Restore an archived category. Idempotent, same rationale as archive."""
         category = await self.get_category(category_id)
         category.is_archived = False
-        self._session.add(category)
-        await self._session.flush()
+        await self.repository.save(category)
         logger.info("category_unarchived", extra={"category_id": str(category_id)})
         return category

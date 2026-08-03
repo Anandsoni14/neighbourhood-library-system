@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
-from api.pagination import Page, PaginationParams
+from api.pagination import Page, PaginationParams, build_page
 from api.validators import PhoneNumber, PostalCode, RequestModel
 from core.pagination import SortDir
 from db.session import get_db
@@ -129,7 +129,7 @@ async def list_members(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([MemberResponse.model_validate(m) for m in members], total, pagination)
+    return build_page(members, total, pagination, MemberResponse)
 
 
 @router.get("/search", response_model=Page[MemberResponse])
@@ -155,7 +155,7 @@ async def search_members(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([MemberResponse.model_validate(m) for m in members], total, pagination)
+    return build_page(members, total, pagination, MemberResponse)
 
 
 @router.get("/{member_id}", response_model=MemberResponse)

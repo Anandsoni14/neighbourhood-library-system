@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff, require_role
-from api.pagination import Page, PaginationParams
+from api.pagination import Page, PaginationParams, build_page
 from api.validators import Password, PhoneNumber, RequestModel
 from core.exceptions import AuthorizationException
 from core.pagination import SortDir
@@ -131,7 +131,7 @@ async def list_staff(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([StaffResponse.model_validate(s) for s in staff], total, pagination)
+    return build_page(staff, total, pagination, StaffResponse)
 
 
 @router.get("/{staff_id}", response_model=StaffResponse)

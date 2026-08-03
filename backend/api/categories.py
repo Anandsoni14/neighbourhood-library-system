@@ -6,9 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
-from api.pagination import Page, PaginationParams
+from api.pagination import Page, PaginationParams, build_page
 from api.validators import RequestModel
-from core.pagination import SortDir
+from core.pagination import ARCHIVE_FILTER_VALUES, ArchiveFilter, SortDir
 from db.session import get_db
 from models import Category
 from services.category import CategoryService
@@ -30,21 +30,6 @@ class CategorySortField(StrEnum):
 _SORT_COLUMNS = {
     CategorySortField.NAME: Category.name,
     CategorySortField.CREATED_AT: Category.created_at,
-}
-
-
-class CategoryArchiveFilter(StrEnum):
-    """Tri-state so "archived only" is expressible, not just "active plus archived"."""
-
-    ACTIVE = "active"
-    ARCHIVED = "archived"
-    ALL = "all"
-
-
-_ARCHIVE_FILTERS: dict[CategoryArchiveFilter, bool | None] = {
-    CategoryArchiveFilter.ACTIVE: False,
-    CategoryArchiveFilter.ARCHIVED: True,
-    CategoryArchiveFilter.ALL: None,
 }
 
 
@@ -96,7 +81,7 @@ async def create_category(
 async def list_categories(
     pagination: PaginationParams = Depends(),
     name: str | None = Query(None, description="Case-insensitive substring match."),
-    archived: CategoryArchiveFilter = Query(CategoryArchiveFilter.ACTIVE),
+    archived: ArchiveFilter = Query(ArchiveFilter.ACTIVE),
     sort_by: CategorySortField = Query(CategorySortField.NAME),
     sort_dir: SortDir = Query(SortDir.ASC),
     db: AsyncSession = Depends(get_db),
@@ -105,13 +90,13 @@ async def list_categories(
     service = CategoryService(db)
     categories, total = await service.list_categories(
         name=name,
-        is_archived=_ARCHIVE_FILTERS[archived],
+        is_archived=ARCHIVE_FILTER_VALUES[archived],
         sort_by=_SORT_COLUMNS[sort_by],
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return Page.create([CategoryResponse.model_validate(c) for c in categories], total, pagination)
+    return build_page(categories, total, pagination, CategoryResponse)
 
 
 @router.get("/{category_id}", response_model=CategoryResponse)

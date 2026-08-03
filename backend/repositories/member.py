@@ -13,8 +13,7 @@ class MemberRepository(BaseRepository[Member]):
 
     async def get_by_email(self, email: str) -> Member | None:
         """Fetch a member by exact email."""
-        result = await self._session.execute(select(Member).where(Member.email == email))
-        return result.scalar_one_or_none()
+        return await self.get_by(Member.email, email)
 
     async def get_by_government_id(
         self, government_id_type: str, government_id_number: str

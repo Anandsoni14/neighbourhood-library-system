@@ -30,7 +30,6 @@ class TransactionService:
         self.repository = TransactionRepository(session)
         self._loan_repository = LoanRepository(session)
         self._member_repository = MemberRepository(session)
-        self._session = session
 
     async def create_transaction(
         self,
@@ -94,8 +93,7 @@ class TransactionService:
         transaction.payment_reference = payment_reference
         transaction.status = TransactionStatus.SUCCESS
 
-        self._session.add(transaction)
-        await self._session.flush()
+        await self.repository.save(transaction)
         logger.info("transaction_paid", extra={"transaction_id": str(transaction_id)})
         return transaction
 
@@ -111,8 +109,7 @@ class TransactionService:
         transaction.payment_reference = payment_reference
         transaction.status = TransactionStatus.FAILED
 
-        self._session.add(transaction)
-        await self._session.flush()
+        await self.repository.save(transaction)
         logger.info("transaction_failed", extra={"transaction_id": str(transaction_id)})
         return transaction
 
@@ -121,8 +118,7 @@ class TransactionService:
         transaction = await self._get_pending(transaction_id)
         transaction.status = TransactionStatus.WAIVED
 
-        self._session.add(transaction)
-        await self._session.flush()
+        await self.repository.save(transaction)
         logger.info("transaction_waived", extra={"transaction_id": str(transaction_id)})
         return transaction
 

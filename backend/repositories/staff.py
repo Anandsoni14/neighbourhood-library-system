@@ -14,15 +14,11 @@ class StaffRepository(BaseRepository[Staff]):
 
     async def get_by_email(self, email: str) -> Staff | None:
         """Fetch staff by exact email."""
-        result = await self._session.execute(select(Staff).where(Staff.email == email))
-        return result.scalar_one_or_none()
+        return await self.get_by(Staff.email, email)
 
     async def get_by_employee_code(self, employee_code: str) -> Staff | None:
         """Fetch staff by exact employee code."""
-        result = await self._session.execute(
-            select(Staff).where(Staff.employee_code == employee_code)
-        )
-        return result.scalar_one_or_none()
+        return await self.get_by(Staff.employee_code, employee_code)
 
     async def count_active_admins(self) -> int:
         """Count ACTIVE staff with the ADMIN role — used to refuse deactivating the last one."""

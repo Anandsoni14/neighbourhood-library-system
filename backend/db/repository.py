@@ -27,8 +27,36 @@ class BaseRepository[ModelT: Base]:
         await self._session.flush()
         return entity
 
+    async def save(self, entity: ModelT) -> ModelT:
+        """Persist a mutated entity. Same add()+flush() shape as add() itself
+        — reads already go through the repository; this is the write-path
+        counterpart, used after updating or archiving/reactivating an entity."""
+        self._session.add(entity)
+        await self._session.flush()
+        return entity
+
     async def delete(self, entity: ModelT) -> None:
         await self._session.delete(entity)
+        await self._session.flush()
+
+    async def get_by(self, column: InstrumentedAttribute[Any], value: Any) -> ModelT | None:
+        """Fetch by exact match on a single column. The named lookup methods
+        on each repository (get_by_email, search_by_isbn, ...) call this —
+        kept as named methods so call sites elsewhere are unaffected."""
+        result = await self._session.execute(select(self._model).where(column == value))
+        return result.scalar_one_or_none()
+
+    def assign(self, entity: ModelT, fields: dict[str, Any], *, skip_none: bool = False) -> ModelT:
+        """Set every key in `fields` as an attribute on `entity`. `skip_none`
+        matches each service's current behavior exactly: False for book/
+        category (an omitted key still overwrites with its Pydantic default
+        of None), True for copy/member/staff (None means "leave unchanged")."""
+        for key, value in fields.items():
+            if skip_none and value is None:
+                continue
+            if hasattr(entity, key):
+                setattr(entity, key, value)
+        return entity
 
     async def list_paginated(
         self,

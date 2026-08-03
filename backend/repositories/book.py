@@ -1,4 +1,3 @@
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import BaseRepository
@@ -13,5 +12,4 @@ class BookRepository(BaseRepository[Book]):
 
     async def search_by_isbn(self, isbn: str) -> Book | None:
         """Search book by exact ISBN."""
-        result = await self._session.execute(select(Book).where(Book.isbn == isbn))
-        return result.scalar_one_or_none()
+        return await self.get_by(Book.isbn, isbn)

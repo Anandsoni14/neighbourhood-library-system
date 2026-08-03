@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
-from api.pagination import Page, PaginationParams
+from api.pagination import Page, PaginationParams, build_page
 from api.validators import RequestModel
 from core.pagination import SortDir
 from db.session import get_db
@@ -119,8 +119,7 @@ async def list_transactions(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    items = [TransactionResponse.model_validate(t) for t in transactions]
-    return Page.create(items, total, pagination)
+    return build_page(transactions, total, pagination, TransactionResponse)
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)

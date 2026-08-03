@@ -1,4 +1,3 @@
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.repository import BaseRepository
@@ -13,5 +12,4 @@ class BookCopyRepository(BaseRepository[BookCopy]):
 
     async def get_by_barcode(self, barcode: str) -> BookCopy | None:
         """Fetch a copy by its exact barcode."""
-        result = await self._session.execute(select(BookCopy).where(BookCopy.barcode == barcode))
-        return result.scalar_one_or_none()
+        return await self.get_by(BookCopy.barcode, barcode)
