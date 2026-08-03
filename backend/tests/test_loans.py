@@ -17,7 +17,7 @@ from core.exceptions import (
 from core.security import create_access_token
 from models import Loan
 from models.book import BookCopy
-from models.enums import CopyCondition, CopyStatus, LoanStatus
+from models.enums import CopyCondition, CopyStatus, LoanStatus, MembershipStatus
 from models.member import Member
 from models.staff import Staff
 from services.book import BookService
@@ -119,7 +119,9 @@ class TestLoanService:
     ) -> None:
         copy = await _make_copy(book_service, copy_service)
         member = await _make_member(member_service)
-        await member_service.update_member(member.member_id, membership_status="BLOCKED")
+        await member_service.update_member(
+            member.member_id, membership_status=MembershipStatus.BLOCKED
+        )
         staff = await _make_staff(staff_service)
 
         with pytest.raises(MemberNotEligibleException):
@@ -139,7 +141,9 @@ class TestLoanService:
     ) -> None:
         copy = await _make_copy(book_service, copy_service)
         member = await _make_member(member_service)
-        await member_service.update_member(member.member_id, membership_status="INACTIVE")
+        await member_service.update_member(
+            member.member_id, membership_status=MembershipStatus.INACTIVE
+        )
         staff = await _make_staff(staff_service)
 
         with pytest.raises(MemberNotEligibleException):

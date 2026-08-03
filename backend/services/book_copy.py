@@ -1,5 +1,6 @@
 import logging
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -17,6 +18,25 @@ from repositories.book_copy import BookCopyRepository
 from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
+
+
+class BookCopySortField(StrEnum):
+    """Columns a book copy listing may be sorted by."""
+
+    BARCODE = "barcode"
+    SHELF_CODE = "shelf_code"
+    CONDITION = "condition"
+    STATUS = "status"
+    CREATED_AT = "created_at"
+
+
+_SORT_COLUMNS: dict[BookCopySortField, InstrumentedAttribute[Any]] = {
+    BookCopySortField.BARCODE: BookCopy.barcode,
+    BookCopySortField.SHELF_CODE: BookCopy.shelf_code,
+    BookCopySortField.CONDITION: BookCopy.condition,
+    BookCopySortField.STATUS: BookCopy.status,
+    BookCopySortField.CREATED_AT: BookCopy.created_at,
+}
 
 
 class BookCopyService:
@@ -82,7 +102,7 @@ class BookCopyService:
         status: CopyStatus | None = None,
         condition: CopyCondition | None = None,
         barcode: str | None = None,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: BookCopySortField = BookCopySortField.BARCODE,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -100,25 +120,47 @@ class BookCopyService:
 
         copies, total = await self.repository.list_paginated(
             filters=filters,
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
         )
         return list(copies), total
 
-    async def update_copy(self, copy_id: UUID, **fields: Any) -> BookCopy:
-        """Update copy fields. Barcode must remain unique."""
+    async def update_copy(
+        self,
+        copy_id: UUID,
+        *,
+        barcode: str | None = None,
+        shelf_code: str | None = None,
+        condition: CopyCondition | None = None,
+        status: CopyStatus | None = None,
+        max_borrow_days: int | None = None,
+        late_fee_per_day: Decimal | None = None,
+    ) -> BookCopy:
+        """Update copy fields. Barcode must remain unique.
+
+        A None argument means "leave unchanged" — the same thing an omitted
+        key meant when this took **fields.
+        """
         copy = await self.get_copy(copy_id)
 
-        if "barcode" in fields and fields["barcode"] and fields["barcode"] != copy.barcode:
+        if barcode and barcode != copy.barcode:
             await ensure_unique(
-                lambda: self.repository.get_by_barcode(fields["barcode"]),
+                lambda: self.repository.get_by_barcode(barcode),
                 id_attr="copy_id",
                 current_id=copy_id,
-                message=f"Barcode {fields['barcode']} is already in use",
+                message=f"Barcode {barcode} is already in use",
             )
 
+        fields: dict[str, Any] = {
+            "barcode": barcode,
+            "shelf_code": shelf_code,
+            "condition": condition,
+            "status": status,
+            "max_borrow_days": max_borrow_days,
+            "late_fee_per_day": late_fee_per_day,
+        }
         self.repository.assign(copy, fields, skip_none=True)
         await self.repository.save(copy)
         logger.info("book_copy_updated", extra={"copy_id": str(copy_id)})

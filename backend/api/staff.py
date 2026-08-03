@@ -1,42 +1,18 @@
-from enum import StrEnum
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_current_staff, require_role
+from api.deps import get_current_staff, get_staff_service, require_role
 from api.pagination import Page, PaginationParams, build_page
 from api.validators import Password, PhoneNumber, RequestModel
 from core.exceptions import AuthorizationException
 from core.pagination import SortDir
-from db.session import get_db
 from models import Staff
 from models.enums import StaffRole, StaffStatus
-from services.staff import StaffService
+from services.staff import StaffService, StaffSortField
 
 router = APIRouter(prefix="/api/v1/staff", tags=["staff"])
-
-
-class StaffSortField(StrEnum):
-    """Columns a staff listing may be sorted by."""
-
-    EMPLOYEE_CODE = "employee_code"
-    FIRST_NAME = "first_name"
-    LAST_NAME = "last_name"
-    EMAIL = "email"
-    ROLE = "role"
-    STATUS = "status"
-
-
-_SORT_COLUMNS = {
-    StaffSortField.EMPLOYEE_CODE: Staff.employee_code,
-    StaffSortField.FIRST_NAME: Staff.first_name,
-    StaffSortField.LAST_NAME: Staff.last_name,
-    StaffSortField.EMAIL: Staff.email,
-    StaffSortField.ROLE: Staff.role,
-    StaffSortField.STATUS: Staff.status,
-}
 
 
 class StaffCreateRequest(RequestModel):
@@ -86,11 +62,10 @@ class StaffResponse(BaseModel):
 @router.post("", response_model=StaffResponse, status_code=201)
 async def create_staff(
     req: StaffCreateRequest,
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
     """Create a new staff member. ADMIN only."""
-    service = StaffService(db)
     staff = await service.create_staff(
         employee_code=req.employee_code,
         first_name=req.first_name,
@@ -114,11 +89,10 @@ async def list_staff(
     phone_number: str | None = Query(None, description="Case-insensitive substring match."),
     sort_by: StaffSortField = Query(StaffSortField.EMPLOYEE_CODE),
     sort_dir: SortDir = Query(SortDir.ASC),
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     _current_staff: Staff = Depends(get_current_staff),
 ) -> Page[StaffResponse]:
     """List staff. Every supplied filter is applied together."""
-    service = StaffService(db)
     staff, total = await service.list_staff(
         role=role,
         status=status,
@@ -126,7 +100,7 @@ async def list_staff(
         employee_code=employee_code,
         email=email,
         phone_number=phone_number,
-        sort_by=_SORT_COLUMNS[sort_by],
+        sort_by=sort_by,
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
@@ -137,11 +111,10 @@ async def list_staff(
 @router.get("/{staff_id}", response_model=StaffResponse)
 async def get_staff(
     staff_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     _current_staff: Staff = Depends(get_current_staff),
 ) -> StaffResponse:
     """Fetch a staff member by ID."""
-    service = StaffService(db)
     staff = await service.get_staff(staff_id)
     return StaffResponse.model_validate(staff)
 
@@ -150,12 +123,19 @@ async def get_staff(
 async def update_staff(
     staff_id: UUID,
     req: StaffUpdateRequest,
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
     """Update a staff member (password changes use the dedicated endpoint). ADMIN only."""
-    service = StaffService(db)
-    staff = await service.update_staff(staff_id, **req.model_dump(exclude_unset=True))
+    staff = await service.update_staff(
+        staff_id,
+        first_name=req.first_name,
+        last_name=req.last_name,
+        email=req.email,
+        phone_number=req.phone_number,
+        role=req.role,
+        status=req.status,
+    )
     return StaffResponse.model_validate(staff)
 
 
@@ -163,13 +143,12 @@ async def update_staff(
 async def change_password(
     staff_id: UUID,
     req: ChangePasswordRequest,
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     current_staff: Staff = Depends(get_current_staff),
 ) -> StaffResponse:
     """Change a staff member's password. Staff may change their own; ADMIN may change anyone's."""
     if current_staff.staff_id != staff_id and current_staff.role != StaffRole.ADMIN:
         raise AuthorizationException("You may only change your own password")
-    service = StaffService(db)
     staff = await service.change_password(staff_id, req.new_password)
     return StaffResponse.model_validate(staff)
 
@@ -177,11 +156,10 @@ async def change_password(
 @router.post("/{staff_id}/deactivate", response_model=StaffResponse)
 async def deactivate_staff(
     staff_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
     """Deactivate a staff member. ADMIN only (guards in StaffService.deactivate_staff)."""
-    service = StaffService(db)
     staff = await service.deactivate_staff(staff_id, acting_staff_id=current_staff.staff_id)
     return StaffResponse.model_validate(staff)
 
@@ -189,11 +167,10 @@ async def deactivate_staff(
 @router.post("/{staff_id}/activate", response_model=StaffResponse)
 async def activate_staff(
     staff_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> StaffResponse:
     """Reactivate a deactivated staff member. ADMIN only."""
-    service = StaffService(db)
     staff = await service.activate_staff(staff_id)
     return StaffResponse.model_validate(staff)
 
@@ -201,9 +178,8 @@ async def activate_staff(
 @router.delete("/{staff_id}", status_code=204)
 async def delete_staff(
     staff_id: UUID,
-    db: AsyncSession = Depends(get_db),
+    service: StaffService = Depends(get_staff_service),
     _current_staff: Staff = Depends(require_role(StaffRole.ADMIN)),
 ) -> None:
     """Delete a staff member. ADMIN only."""
-    service = StaffService(db)
     await service.delete_staff(staff_id)

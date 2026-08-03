@@ -1,5 +1,6 @@
 import logging
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -21,6 +22,23 @@ from repositories.member import MemberRepository
 from repositories.transaction import TransactionRepository
 
 logger = logging.getLogger(__name__)
+
+
+class TransactionSortField(StrEnum):
+    """Columns a transaction listing may be sorted by."""
+
+    CREATED_AT = "created_at"
+    AMOUNT = "amount"
+    STATUS = "status"
+    TRANSACTION_TYPE = "transaction_type"
+
+
+_SORT_COLUMNS: dict[TransactionSortField, InstrumentedAttribute[Any]] = {
+    TransactionSortField.CREATED_AT: Transaction.created_at,
+    TransactionSortField.AMOUNT: Transaction.amount,
+    TransactionSortField.STATUS: Transaction.status,
+    TransactionSortField.TRANSACTION_TYPE: Transaction.transaction_type,
+}
 
 
 class TransactionService:
@@ -146,7 +164,7 @@ class TransactionService:
         loan_id: UUID | None = None,
         status: TransactionStatus | None = None,
         transaction_type: TransactionType | None = None,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: TransactionSortField = TransactionSortField.CREATED_AT,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -164,7 +182,7 @@ class TransactionService:
 
         transactions, total = await self.repository.list_paginated(
             filters=filters,
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,

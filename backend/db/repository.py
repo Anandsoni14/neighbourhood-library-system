@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 from uuid import UUID
 
@@ -46,7 +46,9 @@ class BaseRepository[ModelT: Base]:
         result = await self._session.execute(select(self._model).where(column == value))
         return result.scalar_one_or_none()
 
-    def assign(self, entity: ModelT, fields: dict[str, Any], *, skip_none: bool = False) -> ModelT:
+    def assign(
+        self, entity: ModelT, fields: Mapping[str, Any], *, skip_none: bool = False
+    ) -> ModelT:
         """Set every key in `fields` as an attribute on `entity`. `skip_none`
         matches each service's current behavior exactly: False for book/
         category (an omitted key still overwrites with its Pydantic default

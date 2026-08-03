@@ -80,9 +80,15 @@ class TestStaffService:
         updated = await staff_service.update_staff(staff.staff_id, role=StaffRole.ADMIN)
         assert updated.role == StaffRole.ADMIN
 
-    async def test_update_staff_rejects_password_hash_field(
+    async def test_update_staff_leaves_password_untouched(
         self, staff_service: StaffService
     ) -> None:
+        """A password can only change via change_password(), which hashes it.
+
+        update_staff's signature has no password field at all, so this is
+        enforced by the type checker rather than a runtime guard; what's
+        worth asserting is the outcome — an update doesn't disturb the hash.
+        """
         staff = await staff_service.create_staff(
             employee_code="EMP-201",
             first_name="Bob",
@@ -90,8 +96,12 @@ class TestStaffService:
             email="bob2@library.com",
             password="password123",
         )
-        with pytest.raises(ConflictError):
-            await staff_service.update_staff(staff.staff_id, password_hash="hacked")
+        original_hash = staff.password_hash
+
+        await staff_service.update_staff(staff.staff_id, first_name="Robert")
+
+        assert staff.password_hash == original_hash
+        assert verify_password("password123", staff.password_hash)
 
     async def test_change_password(self, staff_service: StaffService) -> None:
         staff = await staff_service.create_staff(

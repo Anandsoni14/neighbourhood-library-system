@@ -2,6 +2,7 @@ import logging
 import math
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any, NamedTuple
 from uuid import UUID
 
@@ -27,6 +28,25 @@ from repositories.member import MemberRepository
 from repositories.staff import StaffRepository
 
 logger = logging.getLogger(__name__)
+
+
+class LoanSortField(StrEnum):
+    """Columns a loan listing may be sorted by."""
+
+    BORROWED_AT = "borrowed_at"
+    DUE_AT = "due_at"
+    RETURNED_AT = "returned_at"
+    STATUS = "status"
+    CALCULATED_FINE = "calculated_fine"
+
+
+_SORT_COLUMNS: dict[LoanSortField, InstrumentedAttribute[Any]] = {
+    LoanSortField.BORROWED_AT: Loan.borrowed_at,
+    LoanSortField.DUE_AT: Loan.due_at,
+    LoanSortField.RETURNED_AT: Loan.returned_at,
+    LoanSortField.STATUS: Loan.status,
+    LoanSortField.CALCULATED_FINE: Loan.calculated_fine,
+}
 
 
 class OverdueLoan(NamedTuple):
@@ -227,7 +247,7 @@ class LoanService:
         member_name: str | None = None,
         book_title: str | None = None,
         copy_barcode: str | None = None,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: LoanSortField = LoanSortField.BORROWED_AT,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -251,7 +271,7 @@ class LoanService:
 
         loans, total = await self.repository.list_paginated(
             filters=filters,
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
@@ -265,7 +285,7 @@ class LoanService:
         *,
         member_name: str | None = None,
         book_title: str | None = None,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: LoanSortField = LoanSortField.DUE_AT,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -285,7 +305,7 @@ class LoanService:
             filters=filters,
             joins=joins,
             options=[selectinload(Loan.copy)],
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,

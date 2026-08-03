@@ -1,43 +1,20 @@
-from enum import StrEnum
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_current_staff
+from api.deps import get_current_staff, get_member_service
 from api.pagination import Page, PaginationParams, build_page
 from api.validators import PhoneNumber, PostalCode, RequestModel
 from core.pagination import SortDir
-from db.session import get_db
-from models import Member
 from models.enums import MembershipStatus
-from services.member import MemberService
+from services.member import MemberService, MemberSortField
 
 router = APIRouter(
     prefix="/api/v1/members",
     tags=["members"],
     dependencies=[Depends(get_current_staff)],
 )
-
-
-class MemberSortField(StrEnum):
-    """Columns a member listing may be sorted by."""
-
-    FIRST_NAME = "first_name"
-    LAST_NAME = "last_name"
-    EMAIL = "email"
-    MEMBERSHIP_STATUS = "membership_status"
-    CREATED_AT = "created_at"
-
-
-_SORT_COLUMNS = {
-    MemberSortField.FIRST_NAME: Member.first_name,
-    MemberSortField.LAST_NAME: Member.last_name,
-    MemberSortField.EMAIL: Member.email,
-    MemberSortField.MEMBERSHIP_STATUS: Member.membership_status,
-    MemberSortField.CREATED_AT: Member.created_at,
-}
 
 
 class MemberCreateRequest(RequestModel):
@@ -98,10 +75,9 @@ class MemberResponse(BaseModel):
 
 @router.post("", response_model=MemberResponse, status_code=201)
 async def create_member(
-    req: MemberCreateRequest, db: AsyncSession = Depends(get_db)
+    req: MemberCreateRequest, service: MemberService = Depends(get_member_service)
 ) -> MemberResponse:
     """Create a new member."""
-    service = MemberService(db)
     member = await service.create_member(**req.model_dump())
     return MemberResponse.model_validate(member)
 
@@ -115,16 +91,15 @@ async def list_members(
     phone_number: str | None = Query(None, description="Case-insensitive substring match."),
     sort_by: MemberSortField = Query(MemberSortField.LAST_NAME),
     sort_dir: SortDir = Query(SortDir.ASC),
-    db: AsyncSession = Depends(get_db),
+    service: MemberService = Depends(get_member_service),
 ) -> Page[MemberResponse]:
     """List members. Every supplied filter is applied together."""
-    service = MemberService(db)
     members, total = await service.list_members(
         status=status,
         name=name,
         email=email,
         phone_number=phone_number,
-        sort_by=_SORT_COLUMNS[sort_by],
+        sort_by=sort_by,
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
@@ -139,18 +114,17 @@ async def search_members(
     status: MembershipStatus | None = Query(None),
     sort_by: MemberSortField = Query(MemberSortField.LAST_NAME),
     sort_dir: SortDir = Query(SortDir.ASC),
-    db: AsyncSession = Depends(get_db),
+    service: MemberService = Depends(get_member_service),
 ) -> Page[MemberResponse]:
     """Search members by first or last name.
 
     Declared before /{member_id} so this static path isn't captured by the
     member_id UUID path parameter.
     """
-    service = MemberService(db)
     members, total = await service.list_members(
         name=name,
         status=status,
-        sort_by=_SORT_COLUMNS[sort_by],
+        sort_by=sort_by,
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
@@ -159,41 +133,61 @@ async def search_members(
 
 
 @router.get("/{member_id}", response_model=MemberResponse)
-async def get_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> MemberResponse:
+async def get_member(
+    member_id: UUID, service: MemberService = Depends(get_member_service)
+) -> MemberResponse:
     """Fetch a member by ID."""
-    service = MemberService(db)
     member = await service.get_member(member_id)
     return MemberResponse.model_validate(member)
 
 
 @router.put("/{member_id}", response_model=MemberResponse)
 async def update_member(
-    member_id: UUID, req: MemberUpdateRequest, db: AsyncSession = Depends(get_db)
+    member_id: UUID,
+    req: MemberUpdateRequest,
+    service: MemberService = Depends(get_member_service),
 ) -> MemberResponse:
     """Update a member."""
-    service = MemberService(db)
-    member = await service.update_member(member_id, **req.model_dump(exclude_unset=True))
+    member = await service.update_member(
+        member_id,
+        first_name=req.first_name,
+        last_name=req.last_name,
+        email=req.email,
+        phone_number=req.phone_number,
+        government_id_type=req.government_id_type,
+        government_id_number=req.government_id_number,
+        street=req.street,
+        city=req.city,
+        state=req.state,
+        postal_code=req.postal_code,
+        country=req.country,
+        membership_status=req.membership_status,
+        remarks=req.remarks,
+    )
     return MemberResponse.model_validate(member)
 
 
 @router.post("/{member_id}/suspend", response_model=MemberResponse)
-async def suspend_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> MemberResponse:
+async def suspend_member(
+    member_id: UUID, service: MemberService = Depends(get_member_service)
+) -> MemberResponse:
     """Suspend a member, blocking them from borrowing until reactivated."""
-    service = MemberService(db)
     member = await service.suspend_member(member_id)
     return MemberResponse.model_validate(member)
 
 
 @router.post("/{member_id}/reactivate", response_model=MemberResponse)
-async def reactivate_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> MemberResponse:
+async def reactivate_member(
+    member_id: UUID, service: MemberService = Depends(get_member_service)
+) -> MemberResponse:
     """Reactivate a suspended or inactive member."""
-    service = MemberService(db)
     member = await service.reactivate_member(member_id)
     return MemberResponse.model_validate(member)
 
 
 @router.delete("/{member_id}", status_code=204)
-async def delete_member(member_id: UUID, db: AsyncSession = Depends(get_db)) -> None:
+async def delete_member(
+    member_id: UUID, service: MemberService = Depends(get_member_service)
+) -> None:
     """Delete a member."""
-    service = MemberService(db)
     await service.delete_member(member_id)

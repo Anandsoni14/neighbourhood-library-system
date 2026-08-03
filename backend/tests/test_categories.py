@@ -87,7 +87,7 @@ class TestCategoryService:
     async def test_update_category(self, category_service: CategoryService) -> None:
         category = await category_service.create_category(name="Original Name")
         updated = await category_service.update_category(
-            category.category_id, name="Renamed", description="New description"
+            category.category_id, {"name": "Renamed", "description": "New description"}
         )
         assert updated.name == "Renamed"
         assert updated.description == "New description"
@@ -98,7 +98,7 @@ class TestCategoryService:
         await category_service.create_category(name="Taken Name")
         other = await category_service.create_category(name="Free Name")
         with pytest.raises(ConflictError):
-            await category_service.update_category(other.category_id, name="Taken Name")
+            await category_service.update_category(other.category_id, {"name": "Taken Name"})
 
     async def test_archive_category_is_idempotent(self, category_service: CategoryService) -> None:
         category = await category_service.create_category(name="Idempotent Archive")

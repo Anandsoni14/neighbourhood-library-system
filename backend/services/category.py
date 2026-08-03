@@ -1,5 +1,6 @@
 import logging
-from typing import Any
+from enum import StrEnum
+from typing import Any, TypedDict
 from uuid import UUID
 
 from sqlalchemy import ColumnElement
@@ -13,6 +14,28 @@ from repositories.category import CategoryRepository
 from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
+
+
+class CategorySortField(StrEnum):
+    """Columns a category listing may be sorted by."""
+
+    NAME = "name"
+    CREATED_AT = "created_at"
+
+
+_SORT_COLUMNS: dict[CategorySortField, InstrumentedAttribute[Any]] = {
+    CategorySortField.NAME: Category.name,
+    CategorySortField.CREATED_AT: Category.created_at,
+}
+
+
+class CategoryUpdateFields(TypedDict, total=False):
+    """Fields `update_category` may set. A key's *presence* is meaningful —
+    an explicit `description: None` clears the value, while omitting the key
+    leaves it alone — so this stays a mapping rather than explicit parameters."""
+
+    name: str
+    description: str | None
 
 
 class CategoryService:
@@ -50,7 +73,7 @@ class CategoryService:
         *,
         name: str | None = None,
         is_archived: bool | None = False,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: CategorySortField = CategorySortField.NAME,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -65,14 +88,14 @@ class CategoryService:
 
         categories, total = await self.repository.list_paginated(
             filters=filters,
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
         )
         return list(categories), total
 
-    async def update_category(self, category_id: UUID, **fields: Any) -> Category:
+    async def update_category(self, category_id: UUID, fields: CategoryUpdateFields) -> Category:
         """Update category fields. Name must remain unique."""
         category = await self.get_category(category_id)
 

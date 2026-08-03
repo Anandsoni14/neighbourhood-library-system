@@ -69,7 +69,9 @@ class TestMemberService:
         member = await member_service.create_member(
             first_name="A", last_name="B", email="status@example.com"
         )
-        await member_service.update_member(member.member_id, membership_status="BLOCKED")
+        await member_service.update_member(
+            member.member_id, membership_status=MembershipStatus.BLOCKED
+        )
         blocked, total = await member_service.list_members(status=MembershipStatus.BLOCKED)
         assert total == 1
         assert blocked[0].member_id == member.member_id
@@ -81,7 +83,9 @@ class TestMemberService:
         blocked = await member_service.create_member(
             first_name="Zoe", last_name="Blocked", email="zoe.blocked@example.com"
         )
-        await member_service.update_member(blocked.member_id, membership_status="BLOCKED")
+        await member_service.update_member(
+            blocked.member_id, membership_status=MembershipStatus.BLOCKED
+        )
         await member_service.create_member(
             first_name="Zoe", last_name="Active", email="zoe.active@example.com"
         )

@@ -1,36 +1,20 @@
-from enum import StrEnum
+from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_current_staff
+from api.deps import get_category_service, get_current_staff
 from api.pagination import Page, PaginationParams, build_page
 from api.validators import RequestModel
 from core.pagination import ARCHIVE_FILTER_VALUES, ArchiveFilter, SortDir
-from db.session import get_db
-from models import Category
-from services.category import CategoryService
+from services.category import CategoryService, CategorySortField, CategoryUpdateFields
 
 router = APIRouter(
     prefix="/api/v1/categories",
     tags=["categories"],
     dependencies=[Depends(get_current_staff)],
 )
-
-
-class CategorySortField(StrEnum):
-    """Columns a category listing may be sorted by."""
-
-    NAME = "name"
-    CREATED_AT = "created_at"
-
-
-_SORT_COLUMNS = {
-    CategorySortField.NAME: Category.name,
-    CategorySortField.CREATED_AT: Category.created_at,
-}
 
 
 class CategoryCreateRequest(RequestModel):
@@ -69,10 +53,9 @@ class CategoryResponse(BaseModel):
 
 @router.post("", response_model=CategoryResponse, status_code=201)
 async def create_category(
-    req: CategoryCreateRequest, db: AsyncSession = Depends(get_db)
+    req: CategoryCreateRequest, service: CategoryService = Depends(get_category_service)
 ) -> CategoryResponse:
     """Create a new category."""
-    service = CategoryService(db)
     category = await service.create_category(name=req.name, description=req.description)
     return CategoryResponse.model_validate(category)
 
@@ -84,14 +67,13 @@ async def list_categories(
     archived: ArchiveFilter = Query(ArchiveFilter.ACTIVE),
     sort_by: CategorySortField = Query(CategorySortField.NAME),
     sort_dir: SortDir = Query(SortDir.ASC),
-    db: AsyncSession = Depends(get_db),
+    service: CategoryService = Depends(get_category_service),
 ) -> Page[CategoryResponse]:
     """List categories. Filters combine; archived ones are excluded by default."""
-    service = CategoryService(db)
     categories, total = await service.list_categories(
         name=name,
         is_archived=ARCHIVE_FILTER_VALUES[archived],
-        sort_by=_SORT_COLUMNS[sort_by],
+        sort_by=sort_by,
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
@@ -100,20 +82,26 @@ async def list_categories(
 
 
 @router.get("/{category_id}", response_model=CategoryResponse)
-async def get_category(category_id: UUID, db: AsyncSession = Depends(get_db)) -> CategoryResponse:
+async def get_category(
+    category_id: UUID, service: CategoryService = Depends(get_category_service)
+) -> CategoryResponse:
     """Fetch a category by ID."""
-    service = CategoryService(db)
     category = await service.get_category(category_id)
     return CategoryResponse.model_validate(category)
 
 
 @router.put("/{category_id}", response_model=CategoryResponse)
 async def update_category(
-    category_id: UUID, req: CategoryUpdateRequest, db: AsyncSession = Depends(get_db)
+    category_id: UUID,
+    req: CategoryUpdateRequest,
+    service: CategoryService = Depends(get_category_service),
 ) -> CategoryResponse:
     """Update a category."""
-    service = CategoryService(db)
-    category = await service.update_category(category_id, **req.model_dump(exclude_unset=True))
+    # exclude_unset keeps "omitted" distinct from "explicitly null"; cast marks
+    # where Pydantic's typing stops and the mapping begins.
+    category = await service.update_category(
+        category_id, cast(CategoryUpdateFields, req.model_dump(exclude_unset=True))
+    )
     return CategoryResponse.model_validate(category)
 
 
@@ -121,19 +109,17 @@ async def update_category(
 # a used category always 409s. Archiving is the reversible equivalent.
 @router.post("/{category_id}/archive", response_model=CategoryResponse)
 async def archive_category(
-    category_id: UUID, db: AsyncSession = Depends(get_db)
+    category_id: UUID, service: CategoryService = Depends(get_category_service)
 ) -> CategoryResponse:
     """Archive a category so it no longer appears in pickers or default listings."""
-    service = CategoryService(db)
     category = await service.archive_category(category_id)
     return CategoryResponse.model_validate(category)
 
 
 @router.post("/{category_id}/unarchive", response_model=CategoryResponse)
 async def unarchive_category(
-    category_id: UUID, db: AsyncSession = Depends(get_db)
+    category_id: UUID, service: CategoryService = Depends(get_category_service)
 ) -> CategoryResponse:
     """Restore a previously archived category."""
-    service = CategoryService(db)
     category = await service.unarchive_category(category_id)
     return CategoryResponse.model_validate(category)

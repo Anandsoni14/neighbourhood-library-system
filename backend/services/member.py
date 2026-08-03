@@ -1,4 +1,5 @@
 import logging
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,25 @@ from repositories.member import MemberRepository
 from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
+
+
+class MemberSortField(StrEnum):
+    """Columns a member listing may be sorted by."""
+
+    FIRST_NAME = "first_name"
+    LAST_NAME = "last_name"
+    EMAIL = "email"
+    MEMBERSHIP_STATUS = "membership_status"
+    CREATED_AT = "created_at"
+
+
+_SORT_COLUMNS: dict[MemberSortField, InstrumentedAttribute[Any]] = {
+    MemberSortField.FIRST_NAME: Member.first_name,
+    MemberSortField.LAST_NAME: Member.last_name,
+    MemberSortField.EMAIL: Member.email,
+    MemberSortField.MEMBERSHIP_STATUS: Member.membership_status,
+    MemberSortField.CREATED_AT: Member.created_at,
+}
 
 
 class MemberService:
@@ -94,7 +114,7 @@ class MemberService:
         name: str | None = None,
         email: str | None = None,
         phone_number: str | None = None,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: MemberSortField = MemberSortField.LAST_NAME,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -112,27 +132,48 @@ class MemberService:
 
         members, total = await self.repository.list_paginated(
             filters=filters,
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
         )
         return list(members), total
 
-    async def update_member(self, member_id: UUID, **fields: Any) -> Member:
-        """Update member fields. Email and government ID combo must remain unique."""
+    async def update_member(
+        self,
+        member_id: UUID,
+        *,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        email: str | None = None,
+        phone_number: str | None = None,
+        government_id_type: str | None = None,
+        government_id_number: str | None = None,
+        street: str | None = None,
+        city: str | None = None,
+        state: str | None = None,
+        postal_code: str | None = None,
+        country: str | None = None,
+        membership_status: MembershipStatus | None = None,
+        remarks: str | None = None,
+    ) -> Member:
+        """Update member fields. Email and government ID combo must remain unique.
+
+        A None argument means "leave unchanged" — the same thing an omitted
+        key meant when this took **fields.
+        """
         member = await self.get_member(member_id)
 
-        if "email" in fields and fields["email"] and fields["email"] != member.email:
+        if email and email != member.email:
             await ensure_unique(
-                lambda: self.repository.get_by_email(fields["email"]),
+                lambda: self.repository.get_by_email(email),
                 id_attr="member_id",
                 current_id=member_id,
-                message=f"Email {fields['email']} is already in use",
+                message=f"Email {email} is already in use",
             )
 
-        new_gov_type = fields.get("government_id_type", member.government_id_type)
-        new_gov_number = fields.get("government_id_number", member.government_id_number)
+        new_gov_type = government_id_type or member.government_id_type
+        new_gov_number = government_id_number or member.government_id_number
         gov_id_changed = (
             new_gov_type != member.government_id_type
             or new_gov_number != member.government_id_number
@@ -145,6 +186,21 @@ class MemberService:
                 message=f"Government ID {new_gov_type}:{new_gov_number} is already in use",
             )
 
+        fields: dict[str, Any] = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "phone_number": phone_number,
+            "government_id_type": government_id_type,
+            "government_id_number": government_id_number,
+            "street": street,
+            "city": city,
+            "state": state,
+            "postal_code": postal_code,
+            "country": country,
+            "membership_status": membership_status,
+            "remarks": remarks,
+        }
         self.repository.assign(member, fields, skip_none=True)
         await self.repository.save(member)
         logger.info("member_updated", extra={"member_id": str(member_id)})

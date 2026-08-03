@@ -1,44 +1,22 @@
 from datetime import datetime
 from decimal import Decimal
-from enum import StrEnum
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_current_staff
+from api.deps import get_current_staff, get_loan_service
 from api.pagination import Page, PaginationParams, build_page
 from core.pagination import SortDir
-from db.session import get_db
-from models import Loan, Staff
+from models import Staff
 from models.enums import CopyCondition, LoanStatus
-from services.loan import LoanService
+from services.loan import LoanService, LoanSortField
 
 router = APIRouter(
     prefix="/api/v1/loans",
     tags=["loans"],
     dependencies=[Depends(get_current_staff)],
 )
-
-
-class LoanSortField(StrEnum):
-    """Columns a loan listing may be sorted by."""
-
-    BORROWED_AT = "borrowed_at"
-    DUE_AT = "due_at"
-    RETURNED_AT = "returned_at"
-    STATUS = "status"
-    CALCULATED_FINE = "calculated_fine"
-
-
-_SORT_COLUMNS = {
-    LoanSortField.BORROWED_AT: Loan.borrowed_at,
-    LoanSortField.DUE_AT: Loan.due_at,
-    LoanSortField.RETURNED_AT: Loan.returned_at,
-    LoanSortField.STATUS: Loan.status,
-    LoanSortField.CALCULATED_FINE: Loan.calculated_fine,
-}
 
 
 class LoanIssueRequest(BaseModel):
@@ -88,11 +66,10 @@ class OverdueLoanResponse(LoanResponse):
 @router.post("", response_model=LoanResponse, status_code=201)
 async def issue_loan(
     req: LoanIssueRequest,
-    db: AsyncSession = Depends(get_db),
+    service: LoanService = Depends(get_loan_service),
     current_staff: Staff = Depends(get_current_staff),
 ) -> LoanResponse:
     """Issue a loan (borrow a book copy)."""
-    service = LoanService(db)
     loan = await service.issue_loan(
         copy_id=req.copy_id,
         member_id=req.member_id,
@@ -106,11 +83,10 @@ async def issue_loan(
 async def return_loan(
     loan_id: UUID,
     req: LoanReturnRequest,
-    db: AsyncSession = Depends(get_db),
+    service: LoanService = Depends(get_loan_service),
     current_staff: Staff = Depends(get_current_staff),
 ) -> LoanResponse:
     """Return a loan (check in a borrowed copy)."""
-    service = LoanService(db)
     loan = await service.return_loan(
         loan_id=loan_id,
         return_condition=req.return_condition,
@@ -131,10 +107,9 @@ async def list_loans(
     copy_barcode: str | None = Query(None, description="Case-insensitive substring match."),
     sort_by: LoanSortField = Query(LoanSortField.BORROWED_AT),
     sort_dir: SortDir = Query(SortDir.DESC),
-    db: AsyncSession = Depends(get_db),
+    service: LoanService = Depends(get_loan_service),
 ) -> Page[LoanResponse]:
     """List loans. Filters combine; defaults to newest first."""
-    service = LoanService(db)
     loans, total = await service.list_loans(
         member_id=member_id,
         copy_id=copy_id,
@@ -142,7 +117,7 @@ async def list_loans(
         member_name=member_name,
         book_title=book_title,
         copy_barcode=copy_barcode,
-        sort_by=_SORT_COLUMNS[sort_by],
+        sort_by=sort_by,
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
@@ -157,18 +132,17 @@ async def list_overdue_loans(
     book_title: str | None = Query(None, description="Case-insensitive substring match."),
     sort_by: LoanSortField = Query(LoanSortField.DUE_AT),
     sort_dir: SortDir = Query(SortDir.ASC),
-    db: AsyncSession = Depends(get_db),
+    service: LoanService = Depends(get_loan_service),
 ) -> Page[OverdueLoanResponse]:
     """List ACTIVE loans past due, with overdue day count and estimated fine.
 
     Declared before /{loan_id} so this static path isn't swallowed by the
     loan_id UUID path parameter.
     """
-    service = LoanService(db)
     overdue, total = await service.get_overdue_loans(
         member_name=member_name,
         book_title=book_title,
-        sort_by=_SORT_COLUMNS[sort_by],
+        sort_by=sort_by,
         sort_dir=sort_dir,
         limit=pagination.limit,
         offset=pagination.skip,
@@ -185,8 +159,9 @@ async def list_overdue_loans(
 
 
 @router.get("/{loan_id}", response_model=LoanResponse)
-async def get_loan(loan_id: UUID, db: AsyncSession = Depends(get_db)) -> LoanResponse:
+async def get_loan(
+    loan_id: UUID, service: LoanService = Depends(get_loan_service)
+) -> LoanResponse:
     """Fetch a loan by ID."""
-    service = LoanService(db)
     loan = await service.get_loan(loan_id)
     return LoanResponse.model_validate(loan)

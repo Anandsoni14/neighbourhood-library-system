@@ -1,4 +1,5 @@
 import logging
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -17,9 +18,26 @@ from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
 
-# Fields that must never be set through the generic update path — password
-# changes go through change_password() so they're always hashed.
-_PROTECTED_UPDATE_FIELDS = frozenset({"password_hash", "password"})
+
+class StaffSortField(StrEnum):
+    """Columns a staff listing may be sorted by."""
+
+    EMPLOYEE_CODE = "employee_code"
+    FIRST_NAME = "first_name"
+    LAST_NAME = "last_name"
+    EMAIL = "email"
+    ROLE = "role"
+    STATUS = "status"
+
+
+_SORT_COLUMNS: dict[StaffSortField, InstrumentedAttribute[Any]] = {
+    StaffSortField.EMPLOYEE_CODE: Staff.employee_code,
+    StaffSortField.FIRST_NAME: Staff.first_name,
+    StaffSortField.LAST_NAME: Staff.last_name,
+    StaffSortField.EMAIL: Staff.email,
+    StaffSortField.ROLE: Staff.role,
+    StaffSortField.STATUS: Staff.status,
+}
 
 
 class StaffService:
@@ -87,7 +105,7 @@ class StaffService:
         employee_code: str | None = None,
         email: str | None = None,
         phone_number: str | None = None,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: StaffSortField = StaffSortField.EMPLOYEE_CODE,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -109,43 +127,49 @@ class StaffService:
 
         staff, total = await self.repository.list_paginated(
             filters=filters,
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
         )
         return list(staff), total
 
-    async def update_staff(self, staff_id: UUID, **fields: Any) -> Staff:
-        """Update staff fields. Employee code and email must remain unique.
+    async def update_staff(
+        self,
+        staff_id: UUID,
+        *,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        email: str | None = None,
+        phone_number: str | None = None,
+        role: StaffRole | None = None,
+        status: StaffStatus | None = None,
+    ) -> Staff:
+        """Update staff fields. Email must remain unique.
 
-        Password changes are rejected here — use change_password() instead.
+        The signature is the contract: `password`/`password_hash` are absent,
+        so a password can only be changed through change_password(), which
+        hashes it. A None argument means "leave unchanged" — the same thing
+        an omitted key meant when this took **fields.
         """
-        if _PROTECTED_UPDATE_FIELDS & fields.keys():
-            raise ConflictError("Password cannot be changed via update_staff; use change_password")
-
         staff = await self.get_staff(staff_id)
 
-        if (
-            "employee_code" in fields
-            and fields["employee_code"]
-            and fields["employee_code"] != staff.employee_code
-        ):
+        if email and email != staff.email:
             await ensure_unique(
-                lambda: self.repository.get_by_employee_code(fields["employee_code"]),
+                lambda: self.repository.get_by_email(email),
                 id_attr="staff_id",
                 current_id=staff_id,
-                message=f"Employee code {fields['employee_code']} is already in use",
+                message=f"Email {email} is already in use",
             )
 
-        if "email" in fields and fields["email"] and fields["email"] != staff.email:
-            await ensure_unique(
-                lambda: self.repository.get_by_email(fields["email"]),
-                id_attr="staff_id",
-                current_id=staff_id,
-                message=f"Email {fields['email']} is already in use",
-            )
-
+        fields: dict[str, Any] = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email,
+            "phone_number": phone_number,
+            "role": role,
+            "status": status,
+        }
         self.repository.assign(staff, fields, skip_none=True)
         await self.repository.save(staff)
         logger.info("staff_updated", extra={"staff_id": str(staff_id)})

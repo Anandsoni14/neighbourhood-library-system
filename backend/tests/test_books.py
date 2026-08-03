@@ -6,8 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.exceptions import ConflictError, NotFoundError
 from core.pagination import SortDir
-from models import Book, Category
-from services.book import BookService
+from services.book import BookService, BookSortField
 from services.book_copy import BookCopyService
 from services.category import CategoryService
 
@@ -140,7 +139,7 @@ class TestBookService:
     async def test_update_book(self, book_service: BookService) -> None:
         """Test updating a book."""
         book = await book_service.create_book(title="Original Title", author="Author")
-        updated = await book_service.update_book(book.book_id, title="Updated Title")
+        updated = await book_service.update_book(book.book_id, {"title": "Updated Title"})
         assert updated.title == "Updated Title"
 
     async def test_update_book_unknown_category_raises_not_found(
@@ -148,7 +147,7 @@ class TestBookService:
     ) -> None:
         book = await book_service.create_book(title="Recategorize Me", author="Author")
         with pytest.raises(NotFoundError):
-            await book_service.update_book(book.book_id, category_id=uuid4())
+            await book_service.update_book(book.book_id, {"category_id": uuid4()})
 
     async def test_search_books_by_title(self, book_service: BookService) -> None:
         """Test searching books by title."""
@@ -240,7 +239,7 @@ class TestBookService:
             await book_service.create_book(title=title, author="Author")
 
         books, _ = await book_service.list_books(
-            title="Sorted", sort_by=Book.title, sort_dir=SortDir.DESC
+            title="Sorted", sort_by=BookSortField.TITLE, sort_dir=SortDir.DESC
         )
 
         assert [b.title for b in books] == ["Sorted C", "Sorted B", "Sorted A"]
@@ -258,7 +257,7 @@ class TestBookService:
         await book_service.create_book(title="Sort Cat No Category", author="Author")
 
         results, total = await book_service.list_books(
-            title="Sort Cat", sort_by=Category.name, sort_dir=SortDir.ASC
+            title="Sort Cat", sort_by=BookSortField.CATEGORY, sort_dir=SortDir.ASC
         )
 
         assert total == 2

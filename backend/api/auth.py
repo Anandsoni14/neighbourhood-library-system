@@ -1,11 +1,9 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.deps import get_current_staff
+from api.deps import get_auth_service, get_current_staff
 from api.staff import StaffResponse
 from api.validators import LoginPassword
-from db.session import get_db
 from models import Staff
 from services.auth import AuthService
 
@@ -28,9 +26,10 @@ class TokenResponse(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def login(
+    req: LoginRequest, service: AuthService = Depends(get_auth_service)
+) -> TokenResponse:
     """Authenticate a staff member and issue a bearer token."""
-    service = AuthService(db)
     staff, token = await service.login(req.email, req.password)
     return TokenResponse(access_token=token, staff=StaffResponse.model_validate(staff))
 

@@ -1,5 +1,6 @@
 import logging
-from typing import Any
+from enum import StrEnum
+from typing import Any, TypedDict
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, exists
@@ -8,13 +9,49 @@ from sqlalchemy.orm import InstrumentedAttribute
 
 from core.exceptions import ConflictError, NotFoundError
 from core.pagination import SortDir
-from models import Book, BookCopy
+from models import Book, BookCopy, Category
 from models.enums import CopyStatus
 from repositories.book import BookRepository
 from repositories.category import CategoryRepository
 from services.uniqueness import ensure_unique
 
 logger = logging.getLogger(__name__)
+
+
+class BookSortField(StrEnum):
+    """Allowlisted sort columns; anything else 422s before reaching the query builder."""
+
+    TITLE = "title"
+    AUTHOR = "author"
+    CATEGORY = "category"
+    PUBLISHED_YEAR = "published_year"
+    CREATED_AT = "created_at"
+
+
+_SORT_COLUMNS: dict[BookSortField, InstrumentedAttribute[Any]] = {
+    BookSortField.TITLE: Book.title,
+    BookSortField.AUTHOR: Book.author,
+    # A column on another table, which only resolves because list_books always
+    # joins Book.category (OUTER, so uncategorized books sort as NULL rather
+    # than vanishing). Kept next to that query so the coupling stays visible.
+    BookSortField.CATEGORY: Category.name,
+    BookSortField.PUBLISHED_YEAR: Book.published_year,
+    BookSortField.CREATED_AT: Book.created_at,
+}
+
+
+class BookUpdateFields(TypedDict, total=False):
+    """Fields `update_book` may set. A key's *presence* is meaningful — it
+    decides whether the ISBN/category checks run — so this stays a mapping
+    rather than becoming explicit parameters."""
+
+    title: str
+    author: str
+    publisher: str | None
+    isbn: str | None
+    category_id: UUID | None
+    description: str | None
+    published_year: int | None
 
 
 class BookService:
@@ -89,7 +126,7 @@ class BookService:
         author: str | None = None,
         is_archived: bool | None = False,
         in_stock: bool | None = None,
-        sort_by: InstrumentedAttribute[Any] | None = None,
+        sort_by: BookSortField = BookSortField.TITLE,
         sort_dir: SortDir = SortDir.ASC,
         limit: int = 100,
         offset: int = 0,
@@ -120,7 +157,7 @@ class BookService:
 
         books, total = await self.repository.list_paginated(
             filters=filters,
-            sort_by=sort_by,
+            sort_by=_SORT_COLUMNS[sort_by],
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
@@ -128,16 +165,19 @@ class BookService:
         )
         return list(books), total
 
-    async def update_book(self, book_id: UUID, **fields: Any) -> Book:
+    async def update_book(self, book_id: UUID, fields: BookUpdateFields) -> Book:
         """Update book fields. ISBN must remain unique."""
         book = await self.get_book(book_id)
 
-        if "isbn" in fields and fields["isbn"] and fields["isbn"] != book.isbn:
+        # Bound to a local so the deferred lambda closes over a value already
+        # narrowed to str, rather than re-reading a `str | None` key.
+        isbn = fields.get("isbn")
+        if isbn and isbn != book.isbn:
             await ensure_unique(
-                lambda: self.repository.search_by_isbn(fields["isbn"]),
+                lambda: self.repository.search_by_isbn(isbn),
                 id_attr="book_id",
                 current_id=book_id,
-                message=f"ISBN {fields['isbn']} is already in use",
+                message=f"ISBN {isbn} is already in use",
             )
 
         if "category_id" in fields:
