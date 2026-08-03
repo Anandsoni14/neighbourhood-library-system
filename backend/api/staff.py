@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff, require_role
 from api.pagination import Page, PaginationParams
-from api.validators import PhoneNumber
+from api.validators import Password, PhoneNumber, RequestModel
 from core.exceptions import AuthorizationException
 from core.pagination import SortDir
 from db.session import get_db
@@ -39,33 +39,33 @@ _SORT_COLUMNS = {
 }
 
 
-class StaffCreateRequest(BaseModel):
+class StaffCreateRequest(RequestModel):
     """Request schema for creating a staff member."""
 
-    employee_code: str
-    first_name: str
-    last_name: str
-    email: EmailStr
-    password: str = Field(min_length=8)
+    employee_code: str = Field(min_length=1, max_length=32)
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+    email: EmailStr = Field(max_length=160)
+    password: Password
     phone_number: PhoneNumber | None = None
     role: StaffRole | None = None
 
 
-class StaffUpdateRequest(BaseModel):
+class StaffUpdateRequest(RequestModel):
     """Request schema for updating a staff member (excludes password)."""
 
-    first_name: str | None = None
-    last_name: str | None = None
-    email: EmailStr | None = None
+    first_name: str | None = Field(None, min_length=1, max_length=80)
+    last_name: str | None = Field(None, min_length=1, max_length=80)
+    email: EmailStr | None = Field(None, max_length=160)
     phone_number: PhoneNumber | None = None
     role: StaffRole | None = None
     status: StaffStatus | None = None
 
 
-class ChangePasswordRequest(BaseModel):
+class ChangePasswordRequest(RequestModel):
     """Request schema for changing a staff member's password."""
 
-    new_password: str = Field(min_length=8)
+    new_password: Password
 
 
 class StaffResponse(BaseModel):

@@ -9,6 +9,7 @@ frontend's error handling depends on.
 
 from uuid import uuid4
 
+import pytest
 from httpx import AsyncClient
 
 
@@ -96,3 +97,55 @@ async def test_validation_error_returns_422_with_detail_list(
 
     assert response.status_code == 422
     assert isinstance(response.json()["detail"], list)
+
+
+async def test_database_integrity_error_returns_409_not_500(
+    client: AsyncClient,
+    librarian_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every service pre-checks uniqueness before inserting, so the only way
+    an IntegrityError reaches the database unguarded is a genuine race
+    between two concurrent requests — not reproducible in a single-threaded
+    test. This forces that failure past the pre-check to confirm the global
+    handler (not a service's own try/except) is what's catching it."""
+    from sqlalchemy.exc import IntegrityError
+
+    from repositories.category import CategoryRepository
+
+    async def _raise_integrity_error(self: CategoryRepository, entity: object) -> object:
+        raise IntegrityError("INSERT", {}, Exception("duplicate key value"))
+
+    monkeypatch.setattr(CategoryRepository, "add", _raise_integrity_error)
+
+    response = await client.post(
+        "/api/v1/categories", json={"name": "Concurrent Category"}, headers=librarian_headers
+    )
+
+    assert response.status_code == 409
+    assert isinstance(response.json()["detail"], str)
+
+
+async def test_database_data_error_returns_422_not_500(
+    client: AsyncClient,
+    librarian_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defense-in-depth for a database constraint not mirrored in a request
+    model — everything mirrored in this stage is now caught by Pydantic
+    first, so this forces the failure to reach the handler directly."""
+    from sqlalchemy.exc import DataError
+
+    from repositories.category import CategoryRepository
+
+    async def _raise_data_error(self: CategoryRepository, entity: object) -> object:
+        raise DataError("INSERT", {}, Exception("value too long for type"))
+
+    monkeypatch.setattr(CategoryRepository, "add", _raise_data_error)
+
+    response = await client.post(
+        "/api/v1/categories", json={"name": "Data Error Category"}, headers=librarian_headers
+    )
+
+    assert response.status_code == 422
+    assert isinstance(response.json()["detail"], str)

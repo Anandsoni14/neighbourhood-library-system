@@ -27,10 +27,11 @@ async def get_current_staff(
     """
     try:
         payload = decode_access_token(token)
-    except jwt.PyJWTError as e:
+        staff_id = UUID(payload["sub"])
+    except (jwt.PyJWTError, KeyError, ValueError) as e:
         raise AuthenticationException("Invalid or expired token") from e
 
-    staff = await StaffRepository(db).get_by_id(UUID(payload["sub"]))
+    staff = await StaffRepository(db).get_by_id(staff_id)
     if not staff or staff.status != StaffStatus.ACTIVE:
         raise AuthenticationException("Invalid or expired token")
     return staff

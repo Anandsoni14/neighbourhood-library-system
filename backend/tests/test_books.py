@@ -315,6 +315,38 @@ class TestBooksAPI:
         )
         assert response.status_code == 404
 
+    async def test_create_book_endpoint_blank_title_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        """Blank and whitespace-only titles are both rejected, not stored."""
+        for title in ["", "   "]:
+            response = await client.post(
+                "/api/v1/books",
+                json={"title": title, "author": "Author"},
+                headers=librarian_headers,
+            )
+            assert response.status_code == 422
+
+    async def test_create_book_endpoint_title_too_long_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/books",
+            json={"title": "x" * 256, "author": "Author"},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_create_book_endpoint_published_year_out_of_range_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/books",
+            json={"title": "Future Book", "author": "Author", "published_year": 3000},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
     async def test_list_books_endpoint(
         self, client: AsyncClient, librarian_headers: dict[str, str]
     ) -> None:
@@ -592,4 +624,4 @@ class TestBooksAPI:
     ) -> None:
         """Test GET /api/v1/books/search without parameters."""
         response = await client.get("/api/v1/books/search", headers=librarian_headers)
-        assert response.status_code == 400
+        assert response.status_code == 422

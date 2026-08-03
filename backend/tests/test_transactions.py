@@ -402,6 +402,32 @@ class TestTransactionsAPI:
         )
         assert response.status_code == 404
 
+    async def test_create_transaction_endpoint_negative_amount_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
+        response = await client.post(
+            "/api/v1/transactions",
+            json={"member_id": member_id, "transaction_type": "LATE_FEE", "amount": "-100.00"},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_create_transaction_endpoint_amount_too_many_digits_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        member_id = await self._make_member_via_api(client, librarian_headers)
+        response = await client.post(
+            "/api/v1/transactions",
+            json={
+                "member_id": member_id,
+                "transaction_type": "LATE_FEE",
+                "amount": "123456789012345.99",
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
     async def test_pay_transaction_endpoint(
         self, client: AsyncClient, librarian_headers: dict[str, str]
     ) -> None:

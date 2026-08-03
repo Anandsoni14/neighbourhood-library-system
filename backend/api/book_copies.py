@@ -3,11 +3,12 @@ from enum import StrEnum
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
+from api.validators import RequestModel
 from core.pagination import SortDir
 from db.session import get_db
 from models import BookCopy
@@ -40,26 +41,26 @@ _SORT_COLUMNS = {
 }
 
 
-class BookCopyCreateRequest(BaseModel):
+class BookCopyCreateRequest(RequestModel):
     """Request schema for creating a book copy."""
 
     book_id: UUID
-    barcode: str
-    shelf_code: str | None = None
+    barcode: str = Field(min_length=1, max_length=64)
+    shelf_code: str | None = Field(None, max_length=32)
     condition: CopyCondition | None = None
-    max_borrow_days: int | None = None
-    late_fee_per_day: Decimal | None = None
+    max_borrow_days: int | None = Field(None, gt=0, le=32767)
+    late_fee_per_day: Decimal | None = Field(None, ge=0, max_digits=10, decimal_places=2)
 
 
-class BookCopyUpdateRequest(BaseModel):
+class BookCopyUpdateRequest(RequestModel):
     """Request schema for updating a book copy."""
 
-    barcode: str | None = None
-    shelf_code: str | None = None
+    barcode: str | None = Field(None, min_length=1, max_length=64)
+    shelf_code: str | None = Field(None, max_length=32)
     condition: CopyCondition | None = None
     status: CopyStatus | None = None
-    max_borrow_days: int | None = None
-    late_fee_per_day: Decimal | None = None
+    max_borrow_days: int | None = Field(None, gt=0, le=32767)
+    late_fee_per_day: Decimal | None = Field(None, ge=0, max_digits=10, decimal_places=2)
 
 
 class BookCopyResponse(BaseModel):

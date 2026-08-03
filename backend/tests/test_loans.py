@@ -767,6 +767,34 @@ class TestLoansAPI:
         )
         assert response.status_code == 401
 
+    async def test_list_loans_endpoint_no_token_401(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Unlike the other list/get endpoints, these three required no
+        token at all — this pins the fix."""
+        await self._setup_loan_prerequisites(client, db)
+        assert (await client.get("/api/v1/loans")).status_code == 401
+
+    async def test_get_loan_endpoint_no_token_401(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        ids = await self._setup_loan_prerequisites(client, db)
+        issue_resp = await client.post(
+            "/api/v1/loans",
+            json={"copy_id": ids["copy_id"], "member_id": ids["member_id"]},
+            headers=ids["headers"],
+        )
+        loan_id = issue_resp.json()["loan_id"]
+
+        response = await client.get(f"/api/v1/loans/{loan_id}")
+        assert response.status_code == 401
+
+    async def test_overdue_loans_endpoint_no_token_401(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        await self._setup_loan_prerequisites(client, db)
+        assert (await client.get("/api/v1/loans/overdue")).status_code == 401
+
     async def test_issue_loan_endpoint_blocked_member_409(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
@@ -898,7 +926,9 @@ class TestLoansAPI:
             headers=ids["headers"],
         )
 
-        response = await client.get(f"/api/v1/loans?member_id={ids['member_id']}")
+        response = await client.get(
+            f"/api/v1/loans?member_id={ids['member_id']}", headers=ids["headers"]
+        )
         assert response.status_code == 200
         assert response.json()["total"] == 1
 
@@ -912,7 +942,7 @@ class TestLoansAPI:
             headers=ids["headers"],
         )
 
-        response = await client.get("/api/v1/loans?status=ACTIVE")
+        response = await client.get("/api/v1/loans?status=ACTIVE", headers=ids["headers"])
         assert response.status_code == 200
         assert response.json()["total"] >= 1
 
@@ -926,12 +956,16 @@ class TestLoansAPI:
             headers=ids["headers"],
         )
 
-        response = await client.get("/api/v1/loans", params={"book_title": "API Test"})
+        response = await client.get(
+            "/api/v1/loans", params={"book_title": "API Test"}, headers=ids["headers"]
+        )
         assert response.status_code == 200
         assert response.json()["total"] == 1
 
         no_match_response = await client.get(
-            "/api/v1/loans", params={"book_title": "Nonexistent Title XYZ"}
+            "/api/v1/loans",
+            params={"book_title": "Nonexistent Title XYZ"},
+            headers=ids["headers"],
         )
         assert no_match_response.json()["total"] == 0
 
@@ -945,7 +979,9 @@ class TestLoansAPI:
             headers=ids["headers"],
         )
 
-        response = await client.get("/api/v1/loans", params={"member_name": "Member"})
+        response = await client.get(
+            "/api/v1/loans", params={"member_name": "Member"}, headers=ids["headers"]
+        )
         assert response.status_code == 200
         assert response.json()["total"] == 1
 
@@ -964,7 +1000,9 @@ class TestLoansAPI:
         )
         barcode = copy_resp.json()["barcode"]
 
-        response = await client.get("/api/v1/loans", params={"copy_barcode": barcode})
+        response = await client.get(
+            "/api/v1/loans", params={"copy_barcode": barcode}, headers=ids["headers"]
+        )
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 1
@@ -979,7 +1017,7 @@ class TestLoansAPI:
         )
         loan_id = issue_resp.json()["loan_id"]
 
-        response = await client.get(f"/api/v1/loans/{loan_id}")
+        response = await client.get(f"/api/v1/loans/{loan_id}", headers=ids["headers"])
         assert response.status_code == 200
         assert response.json()["loan_id"] == loan_id
 
@@ -1001,7 +1039,7 @@ class TestLoansAPI:
         db.add(loan)
         await db.flush()
 
-        response = await client.get("/api/v1/loans/overdue")
+        response = await client.get("/api/v1/loans/overdue", headers=ids["headers"])
         assert response.status_code == 200
         data = response.json()
         matching = [entry for entry in data["items"] if entry["loan_id"] == loan_id]
@@ -1028,13 +1066,17 @@ class TestLoansAPI:
         await db.flush()
 
         matching = await client.get(
-            "/api/v1/loans/overdue", params={"member_name": "Member", "book_title": "API Test"}
+            "/api/v1/loans/overdue",
+            params={"member_name": "Member", "book_title": "API Test"},
+            headers=ids["headers"],
         )
         assert matching.status_code == 200
         assert loan_id in [entry["loan_id"] for entry in matching.json()["items"]]
 
         no_match = await client.get(
-            "/api/v1/loans/overdue", params={"member_name": "Nonexistent Name XYZ"}
+            "/api/v1/loans/overdue",
+            params={"member_name": "Nonexistent Name XYZ"},
+            headers=ids["headers"],
         )
         assert no_match.status_code == 200
         assert loan_id not in [entry["loan_id"] for entry in no_match.json()["items"]]
@@ -1050,6 +1092,6 @@ class TestLoansAPI:
         )
         loan_id = issue_resp.json()["loan_id"]
 
-        response = await client.get("/api/v1/loans/overdue")
+        response = await client.get("/api/v1/loans/overdue", headers=ids["headers"])
         assert response.status_code == 200
         assert loan_id not in [entry["loan_id"] for entry in response.json()["items"]]

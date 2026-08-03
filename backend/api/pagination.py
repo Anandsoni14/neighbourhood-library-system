@@ -8,7 +8,9 @@ from pydantic import BaseModel
 class PaginationParams:
     """Shared `skip`/`limit` query params, declared once as a FastAPI dependency."""
 
-    skip: int = Query(0, ge=0, description="Number of records to skip.")
+    # Bounded because the database's row-offset field is a 64-bit integer;
+    # anything larger fails there instead of being reported as bad input.
+    skip: int = Query(0, ge=0, le=2**63 - 1, description="Number of records to skip.")
     limit: int = Query(100, ge=1, le=1000, description="Maximum records to return.")
 
 

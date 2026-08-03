@@ -4,11 +4,12 @@ from enum import StrEnum
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
+from api.validators import RequestModel
 from core.pagination import SortDir
 from db.session import get_db
 from models import Transaction
@@ -39,28 +40,28 @@ _SORT_COLUMNS = {
 }
 
 
-class TransactionCreateRequest(BaseModel):
+class TransactionCreateRequest(RequestModel):
     """Request schema for recording a new fee or waiver."""
 
     member_id: UUID
     transaction_type: TransactionType
-    amount: Decimal
+    amount: Decimal = Field(ge=0, max_digits=10, decimal_places=2)
     loan_id: UUID | None = None
-    payment_reference: str | None = None
+    payment_reference: str | None = Field(None, max_length=80)
 
 
-class TransactionPaymentRequest(BaseModel):
+class TransactionPaymentRequest(RequestModel):
     """Request schema for recording a payment against a PENDING transaction."""
 
     payment_mode: PaymentMode
-    payment_reference: str | None = None
+    payment_reference: str | None = Field(None, max_length=80)
 
 
-class TransactionFailureRequest(BaseModel):
+class TransactionFailureRequest(RequestModel):
     """Request schema for marking a PENDING transaction's payment attempt as failed."""
 
     payment_mode: PaymentMode | None = None
-    payment_reference: str | None = None
+    payment_reference: str | None = Field(None, max_length=80)
 
 
 class TransactionResponse(BaseModel):

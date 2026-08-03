@@ -2,11 +2,12 @@ from enum import StrEnum
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
+from api.validators import RequestModel
 from core.pagination import SortDir
 from db.session import get_db
 from models import Category
@@ -47,18 +48,27 @@ _ARCHIVE_FILTERS: dict[CategoryArchiveFilter, bool | None] = {
 }
 
 
-class CategoryCreateRequest(BaseModel):
+class CategoryCreateRequest(RequestModel):
     """Request schema for creating a category."""
 
-    name: str
+    name: str = Field(min_length=1, max_length=80)
     description: str | None = None
 
 
-class CategoryUpdateRequest(BaseModel):
+class CategoryUpdateRequest(RequestModel):
     """Request schema for updating a category."""
 
-    name: str | None = None
+    name: str | None = Field(None, min_length=1, max_length=80)
     description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _reject_null(cls, value: str | None) -> str | None:
+        """`name` is required in the database; omit the field to leave it
+        unchanged instead of sending `null`."""
+        if value is None:
+            raise ValueError("name cannot be null")
+        return value
 
 
 class CategoryResponse(BaseModel):

@@ -185,6 +185,35 @@ class TestMembersAPI:
         )
         assert response.status_code == 422
 
+    async def test_create_member_blank_first_name_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        for first_name in ["", "   "]:
+            response = await client.post(
+                "/api/v1/members",
+                json={
+                    "first_name": first_name,
+                    "last_name": "Doe",
+                    "email": f"blank-name-{first_name!r}@example.com",
+                },
+                headers=librarian_headers,
+            )
+            assert response.status_code == 422
+
+    async def test_create_member_first_name_too_long_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/members",
+            json={
+                "first_name": "x" * 81,
+                "last_name": "Doe",
+                "email": "too-long-name@example.com",
+            },
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
     @pytest.mark.parametrize("phone_number", ["123", "12345678901", "98a6543210", "12345 6789"])
     async def test_create_member_rejects_invalid_phone_number(
         self, client: AsyncClient, librarian_headers: dict[str, str], phone_number: str

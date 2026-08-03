@@ -394,6 +394,40 @@ class TestStaffAPI:
         )
         assert response.status_code == 422
 
+    async def test_create_staff_password_too_long_422(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        """bcrypt refuses secrets over 72 bytes; this must be a 422 at the
+        boundary, not a crash when the password is later hashed."""
+        response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-002B",
+                "first_name": "Bob",
+                "last_name": "Staff",
+                "email": "bob.long@library.com",
+                "password": "a" * 73,
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_create_staff_blank_employee_code_422(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "   ",
+                "first_name": "Bob",
+                "last_name": "Staff",
+                "email": "bob.blank@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        assert response.status_code == 422
+
     async def test_list_staff_endpoint(
         self, client: AsyncClient, admin_headers: dict[str, str]
     ) -> None:
@@ -535,6 +569,29 @@ class TestStaffAPI:
             headers=librarian_headers,
         )
         assert response.status_code == 403
+
+    async def test_change_password_endpoint_too_long_422(
+        self, client: AsyncClient, admin_headers: dict[str, str]
+    ) -> None:
+        create_response = await client.post(
+            "/api/v1/staff",
+            json={
+                "employee_code": "API-005C",
+                "first_name": "Eve",
+                "last_name": "Staff",
+                "email": "eve.c@library.com",
+                "password": "supersecret123",
+            },
+            headers=admin_headers,
+        )
+        staff_id = create_response.json()["staff_id"]
+
+        response = await client.post(
+            f"/api/v1/staff/{staff_id}/change-password",
+            json={"new_password": "a" * 73},
+            headers=admin_headers,
+        )
+        assert response.status_code == 422
 
     async def test_delete_staff_endpoint(
         self, client: AsyncClient, admin_headers: dict[str, str]

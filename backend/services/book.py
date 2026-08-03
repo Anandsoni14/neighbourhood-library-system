@@ -62,8 +62,6 @@ class BookService:
             published_year=published_year,
         )
         created = await self.repository.add(book)
-        # add() only flushes; `category` stays unloaded until refreshed here,
-        # so the sync BookResponse.model_validate() below doesn't lazy-load.
         await self._session.refresh(created, attribute_names=["category"])
         logger.info(
             "book_created",

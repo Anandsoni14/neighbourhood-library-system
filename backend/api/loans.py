@@ -15,7 +15,11 @@ from models import Loan, Staff
 from models.enums import CopyCondition, LoanStatus
 from services.loan import LoanService
 
-router = APIRouter(prefix="/api/v1/loans", tags=["loans"])
+router = APIRouter(
+    prefix="/api/v1/loans",
+    tags=["loans"],
+    dependencies=[Depends(get_current_staff)],
+)
 
 
 class LoanSortField(StrEnum):

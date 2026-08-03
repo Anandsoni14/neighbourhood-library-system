@@ -1,12 +1,14 @@
 from enum import StrEnum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
+from api.validators import RequestModel
+from core.exceptions import ValidationError
 from core.pagination import SortDir
 from db.session import get_db
 from models import Book, Category
@@ -54,16 +56,16 @@ _ARCHIVE_FILTERS: dict[BookArchiveFilter, bool | None] = {
 }
 
 
-class BookRequest(BaseModel):
+class BookRequest(RequestModel):
     """Request schema for creating/updating a book."""
 
-    title: str
-    author: str
-    publisher: str | None = None
-    isbn: str | None = None
+    title: str = Field(min_length=1, max_length=255)
+    author: str = Field(min_length=1, max_length=160)
+    publisher: str | None = Field(None, max_length=160)
+    isbn: str | None = Field(None, min_length=1, max_length=20)
     category_id: UUID | None = None
     description: str | None = None
-    published_year: int | None = None
+    published_year: int | None = Field(None, ge=1400, le=2100)
 
 
 class CategoryRef(BaseModel):
@@ -153,9 +155,7 @@ async def search_books(
     """Search books by title and/or ISBN. Declared before /{book_id} so this
     static path isn't captured by the book_id UUID path parameter."""
     if not title and not isbn:
-        raise HTTPException(
-            status_code=400, detail="Provide at least one search parameter (title or isbn)"
-        )
+        raise ValidationError("Provide at least one search parameter (title or isbn)")
     service = BookService(db)
     books, total = await service.list_books(
         title=title,

@@ -154,6 +154,57 @@ class TestBookCopiesAPI:
         )
         assert response.status_code == 404
 
+    async def test_create_book_copy_blank_barcode_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        book_resp = await client.post(
+            "/api/v1/books",
+            json={"title": "Blank Barcode Book", "author": "Author"},
+            headers=librarian_headers,
+        )
+        book_id = book_resp.json()["book_id"]
+
+        response = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "   "},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_create_book_copy_zero_max_borrow_days_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        book_resp = await client.post(
+            "/api/v1/books",
+            json={"title": "Zero Borrow Days Book", "author": "Author"},
+            headers=librarian_headers,
+        )
+        book_id = book_resp.json()["book_id"]
+
+        response = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "COPY-ZERO-DAYS", "max_borrow_days": 0},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
+    async def test_create_book_copy_negative_late_fee_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        book_resp = await client.post(
+            "/api/v1/books",
+            json={"title": "Negative Fee Book", "author": "Author"},
+            headers=librarian_headers,
+        )
+        book_id = book_resp.json()["book_id"]
+
+        response = await client.post(
+            "/api/v1/book-copies",
+            json={"book_id": book_id, "barcode": "COPY-NEG-FEE", "late_fee_per_day": -5},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
+
     async def test_create_book_copy_on_archived_book_409(
         self, client: AsyncClient, librarian_headers: dict[str, str]
     ) -> None:

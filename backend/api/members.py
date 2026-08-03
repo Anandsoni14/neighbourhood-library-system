@@ -2,12 +2,12 @@ from enum import StrEnum
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
 from api.pagination import Page, PaginationParams
-from api.validators import PhoneNumber, PostalCode
+from api.validators import PhoneNumber, PostalCode, RequestModel
 from core.pagination import SortDir
 from db.session import get_db
 from models import Member
@@ -40,37 +40,37 @@ _SORT_COLUMNS = {
 }
 
 
-class MemberCreateRequest(BaseModel):
+class MemberCreateRequest(RequestModel):
     """Request schema for creating a member."""
 
-    first_name: str
-    last_name: str
-    email: EmailStr
+    first_name: str = Field(min_length=1, max_length=80)
+    last_name: str = Field(min_length=1, max_length=80)
+    email: EmailStr = Field(max_length=160)
     phone_number: PhoneNumber | None = None
-    government_id_type: str | None = None
-    government_id_number: str | None = None
-    street: str | None = None
-    city: str | None = None
-    state: str | None = None
+    government_id_type: str | None = Field(None, max_length=40)
+    government_id_number: str | None = Field(None, max_length=64)
+    street: str | None = Field(None, max_length=160)
+    city: str | None = Field(None, max_length=80)
+    state: str | None = Field(None, max_length=80)
     postal_code: PostalCode | None = None
-    country: str | None = None
+    country: str | None = Field(None, max_length=80)
     remarks: str | None = None
 
 
-class MemberUpdateRequest(BaseModel):
+class MemberUpdateRequest(RequestModel):
     """Request schema for updating a member."""
 
-    first_name: str | None = None
-    last_name: str | None = None
-    email: EmailStr | None = None
+    first_name: str | None = Field(None, min_length=1, max_length=80)
+    last_name: str | None = Field(None, min_length=1, max_length=80)
+    email: EmailStr | None = Field(None, max_length=160)
     phone_number: PhoneNumber | None = None
-    government_id_type: str | None = None
-    government_id_number: str | None = None
-    street: str | None = None
-    city: str | None = None
-    state: str | None = None
+    government_id_type: str | None = Field(None, max_length=40)
+    government_id_number: str | None = Field(None, max_length=64)
+    street: str | None = Field(None, max_length=160)
+    city: str | None = Field(None, max_length=80)
+    state: str | None = Field(None, max_length=80)
     postal_code: PostalCode | None = None
-    country: str | None = None
+    country: str | None = Field(None, max_length=80)
     membership_status: MembershipStatus | None = None
     remarks: str | None = None
 

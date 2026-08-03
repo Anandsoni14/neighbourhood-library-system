@@ -144,6 +144,15 @@ class TestCategoriesAPI:
         )
         assert response.status_code == 409
 
+    async def test_create_category_endpoint_blank_name_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        for name in ["", "   "]:
+            response = await client.post(
+                "/api/v1/categories", json={"name": name}, headers=librarian_headers
+            )
+            assert response.status_code == 422
+
     async def test_get_category_not_found(
         self, client: AsyncClient, librarian_headers: dict[str, str]
     ) -> None:
@@ -195,6 +204,23 @@ class TestCategoriesAPI:
         )
         assert response.status_code == 200
         assert response.json()["name"] == "Updated Name"
+
+    async def test_update_category_endpoint_null_name_422(
+        self, client: AsyncClient, librarian_headers: dict[str, str]
+    ) -> None:
+        """`name` is required in the database; explicit null used to reach it
+        and crash instead of being rejected."""
+        create_resp = await client.post(
+            "/api/v1/categories", json={"name": "Null Name Target"}, headers=librarian_headers
+        )
+        category_id = create_resp.json()["category_id"]
+
+        response = await client.put(
+            f"/api/v1/categories/{category_id}",
+            json={"name": None},
+            headers=librarian_headers,
+        )
+        assert response.status_code == 422
 
     async def test_archive_and_unarchive_category_endpoint(
         self, client: AsyncClient, librarian_headers: dict[str, str]

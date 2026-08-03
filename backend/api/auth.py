@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.deps import get_current_staff
 from api.staff import StaffResponse
+from api.validators import LoginPassword
 from db.session import get_db
 from models import Staff
 from services.auth import AuthService
@@ -15,7 +16,7 @@ class LoginRequest(BaseModel):
     """Request schema for staff login."""
 
     email: EmailStr
-    password: str
+    password: LoginPassword
 
 
 class TokenResponse(BaseModel):

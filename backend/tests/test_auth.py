@@ -5,6 +5,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import get_settings
 from core.exceptions import AuthenticationException
 from core.security import create_access_token
 from models.enums import StaffRole, StaffStatus
@@ -117,6 +118,17 @@ class TestAuthAPI:
         )
         assert response.status_code == 401
 
+    async def test_login_endpoint_password_too_long_422(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """bcrypt refuses secrets over 72 bytes on verify as well as on hash;
+        this must be a 422 at the boundary, not a crash."""
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "nobody@library.com", "password": "a" * 73},
+        )
+        assert response.status_code == 422
+
     async def test_me_endpoint_with_valid_token(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
@@ -146,5 +158,26 @@ class TestAuthAPI:
 
     async def test_me_endpoint_unknown_staff_id_401(self, client: AsyncClient) -> None:
         token = create_access_token(uuid4(), StaffRole.LIBRARIAN)
+        response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 401
+
+    async def test_me_endpoint_malformed_sub_claim_401(self, client: AsyncClient) -> None:
+        """A validly-signed token whose `sub` isn't a UUID used to raise
+        ValueError and 500 instead of failing authentication."""
+        settings = get_settings()
+        token = jwt.encode(
+            {"sub": "not-a-uuid", "role": "LIBRARIAN"},
+            settings.jwt_secret_key,
+            algorithm=settings.jwt_algorithm,
+        )
+        response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 401
+
+    async def test_me_endpoint_missing_sub_claim_401(self, client: AsyncClient) -> None:
+        """A token with no `sub` claim at all used to raise KeyError and 500."""
+        settings = get_settings()
+        token = jwt.encode(
+            {"role": "LIBRARIAN"}, settings.jwt_secret_key, algorithm=settings.jwt_algorithm
+        )
         response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 401

@@ -8,6 +8,14 @@ class DomainException(Exception):
         super().__init__(self.message)
 
 
+class ValidationError(DomainException):
+    """The request is well-formed but invalid — for example, a required
+    combination of query parameters is missing. Use this instead of raising
+    HTTPException from a route, so the response is built in one place."""
+
+    message: str = "The request is invalid."
+
+
 class NotFoundError(DomainException):
     """A requested entity does not exist."""
 
